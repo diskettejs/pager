@@ -7,9 +7,10 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-napi = { version = "3", default-features = false, features = ["napi10"] }
+napi = { version = "3", default-features = false, features = ["napi10", "tokio_rt"] }
 napi-derive = "3"
 zenoh = "1.9.0"
+tokio = { version = "1", features = ["time"] }
 
 [build-dependencies]
 napi-build = "2"

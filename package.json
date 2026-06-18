@@ -8,12 +8,14 @@
   },
   "files": [
     "index.d.ts",
-    "index.js"
+    "index.js",
+    "main.d.ts",
+    "main.js"
   ],
   "type": "module",
-  "main": "index.js",
+  "main": "main.js",
   "browser": "browser.js",
-  "types": "index.d.ts",
+  "types": "main.d.ts",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
@@ -32,12 +34,14 @@
     "@emnapi/core": "^1.11.1",
     "@emnapi/runtime": "^1.11.1",
     "@napi-rs/cli": "^3.7.2",
+    "@types/node": "^25.9.3",
     "oxfmt": "^0.55.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   },
   "napi": {
     "binaryName": "zenoh-node",
+    "constEnum": false,
     "targets": [
       "x86_64-pc-windows-msvc",
       "x86_64-apple-darwin",
