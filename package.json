@@ -1,10 +1,10 @@
 {
-  "name": "@diskette/pager",
+  "name": "@diskette/dialtone",
   "version": "0.0.0",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/diskettejs/zenoh-ts.git"
+    "url": "git+https://github.com/diskettejs/dialtone.git"
   },
   "files": [
     "index.d.ts",
@@ -39,7 +39,7 @@
     "vitest": "^4.1.9"
   },
   "napi": {
-    "binaryName": "pager",
+    "binaryName": "dialtone",
     "constEnum": false,
     "targets": [
       "x86_64-pc-windows-msvc",
