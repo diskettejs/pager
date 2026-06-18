@@ -1,5 +1,5 @@
 {
-  "name": "@diskette/zenoh-node",
+  "name": "@diskette/pager",
   "version": "0.0.0",
   "license": "MIT",
   "repository": {
@@ -39,7 +39,7 @@
     "vitest": "^4.1.9"
   },
   "napi": {
-    "binaryName": "zenoh-node",
+    "binaryName": "pager",
     "constEnum": false,
     "targets": [
       "x86_64-pc-windows-msvc",

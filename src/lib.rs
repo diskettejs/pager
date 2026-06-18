@@ -1,6 +1,6 @@
 #![deny(clippy::all)]
 
-//! `@diskette/zenoh-node` — Node.js native bindings for Zenoh (NAPI-RS).
+//! Node.js native bindings for Zenoh (NAPI-RS).
 //!
 //! Module layout mirrors Zenoh's concepts: one file per entity / value type.
 //! Zenoh types are referenced by fully-qualified path so the JS-facing structs can

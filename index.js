@@ -74,13 +74,13 @@ function requireNative() {
   } else if (process.platform === 'android') {
     if (process.arch === 'arm64') {
       try {
-        return require('./zenoh-node.android-arm64.node')
+        return require('./pager.android-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-android-arm64')
-        const bindingPackageVersion = require('@diskette/zenoh-node-android-arm64/package.json').version
+        const binding = require('@diskette/pager-android-arm64')
+        const bindingPackageVersion = require('@diskette/pager-android-arm64/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -90,13 +90,13 @@ function requireNative() {
       }
     } else if (process.arch === 'arm') {
       try {
-        return require('./zenoh-node.android-arm-eabi.node')
+        return require('./pager.android-arm-eabi.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-android-arm-eabi')
-        const bindingPackageVersion = require('@diskette/zenoh-node-android-arm-eabi/package.json').version
+        const binding = require('@diskette/pager-android-arm-eabi')
+        const bindingPackageVersion = require('@diskette/pager-android-arm-eabi/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -111,13 +111,13 @@ function requireNative() {
     if (process.arch === 'x64') {
       if ((process.config && process.config.variables && process.config.variables.shlib_suffix === 'dll.a') || (process.config && process.config.variables && process.config.variables.node_target_type === 'shared_library')) {
         try {
-        return require('./zenoh-node.win32-x64-gnu.node')
+        return require('./pager.win32-x64-gnu.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-win32-x64-gnu')
-        const bindingPackageVersion = require('@diskette/zenoh-node-win32-x64-gnu/package.json').version
+        const binding = require('@diskette/pager-win32-x64-gnu')
+        const bindingPackageVersion = require('@diskette/pager-win32-x64-gnu/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -127,13 +127,13 @@ function requireNative() {
       }
       } else {
         try {
-        return require('./zenoh-node.win32-x64-msvc.node')
+        return require('./pager.win32-x64-msvc.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-win32-x64-msvc')
-        const bindingPackageVersion = require('@diskette/zenoh-node-win32-x64-msvc/package.json').version
+        const binding = require('@diskette/pager-win32-x64-msvc')
+        const bindingPackageVersion = require('@diskette/pager-win32-x64-msvc/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -144,13 +144,13 @@ function requireNative() {
       }
     } else if (process.arch === 'ia32') {
       try {
-        return require('./zenoh-node.win32-ia32-msvc.node')
+        return require('./pager.win32-ia32-msvc.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-win32-ia32-msvc')
-        const bindingPackageVersion = require('@diskette/zenoh-node-win32-ia32-msvc/package.json').version
+        const binding = require('@diskette/pager-win32-ia32-msvc')
+        const bindingPackageVersion = require('@diskette/pager-win32-ia32-msvc/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -160,13 +160,13 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./zenoh-node.win32-arm64-msvc.node')
+        return require('./pager.win32-arm64-msvc.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-win32-arm64-msvc')
-        const bindingPackageVersion = require('@diskette/zenoh-node-win32-arm64-msvc/package.json').version
+        const binding = require('@diskette/pager-win32-arm64-msvc')
+        const bindingPackageVersion = require('@diskette/pager-win32-arm64-msvc/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -179,13 +179,13 @@ function requireNative() {
     }
   } else if (process.platform === 'darwin') {
     try {
-      return require('./zenoh-node.darwin-universal.node')
+      return require('./pager.darwin-universal.node')
     } catch (e) {
       loadErrors.push(e)
     }
     try {
-      const binding = require('@diskette/zenoh-node-darwin-universal')
-      const bindingPackageVersion = require('@diskette/zenoh-node-darwin-universal/package.json').version
+      const binding = require('@diskette/pager-darwin-universal')
+      const bindingPackageVersion = require('@diskette/pager-darwin-universal/package.json').version
       if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
         throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
       }
@@ -195,13 +195,13 @@ function requireNative() {
     }
     if (process.arch === 'x64') {
       try {
-        return require('./zenoh-node.darwin-x64.node')
+        return require('./pager.darwin-x64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-darwin-x64')
-        const bindingPackageVersion = require('@diskette/zenoh-node-darwin-x64/package.json').version
+        const binding = require('@diskette/pager-darwin-x64')
+        const bindingPackageVersion = require('@diskette/pager-darwin-x64/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -211,13 +211,13 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./zenoh-node.darwin-arm64.node')
+        return require('./pager.darwin-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-darwin-arm64')
-        const bindingPackageVersion = require('@diskette/zenoh-node-darwin-arm64/package.json').version
+        const binding = require('@diskette/pager-darwin-arm64')
+        const bindingPackageVersion = require('@diskette/pager-darwin-arm64/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -231,13 +231,13 @@ function requireNative() {
   } else if (process.platform === 'freebsd') {
     if (process.arch === 'x64') {
       try {
-        return require('./zenoh-node.freebsd-x64.node')
+        return require('./pager.freebsd-x64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-freebsd-x64')
-        const bindingPackageVersion = require('@diskette/zenoh-node-freebsd-x64/package.json').version
+        const binding = require('@diskette/pager-freebsd-x64')
+        const bindingPackageVersion = require('@diskette/pager-freebsd-x64/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -247,13 +247,13 @@ function requireNative() {
       }
     } else if (process.arch === 'arm64') {
       try {
-        return require('./zenoh-node.freebsd-arm64.node')
+        return require('./pager.freebsd-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-freebsd-arm64')
-        const bindingPackageVersion = require('@diskette/zenoh-node-freebsd-arm64/package.json').version
+        const binding = require('@diskette/pager-freebsd-arm64')
+        const bindingPackageVersion = require('@diskette/pager-freebsd-arm64/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -268,13 +268,13 @@ function requireNative() {
     if (process.arch === 'x64') {
       if (isMusl()) {
         try {
-          return require('./zenoh-node.linux-x64-musl.node')
+          return require('./pager.linux-x64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@diskette/zenoh-node-linux-x64-musl')
-          const bindingPackageVersion = require('@diskette/zenoh-node-linux-x64-musl/package.json').version
+          const binding = require('@diskette/pager-linux-x64-musl')
+          const bindingPackageVersion = require('@diskette/pager-linux-x64-musl/package.json').version
           if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -284,13 +284,13 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./zenoh-node.linux-x64-gnu.node')
+          return require('./pager.linux-x64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@diskette/zenoh-node-linux-x64-gnu')
-          const bindingPackageVersion = require('@diskette/zenoh-node-linux-x64-gnu/package.json').version
+          const binding = require('@diskette/pager-linux-x64-gnu')
+          const bindingPackageVersion = require('@diskette/pager-linux-x64-gnu/package.json').version
           if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -302,13 +302,13 @@ function requireNative() {
     } else if (process.arch === 'arm64') {
       if (isMusl()) {
         try {
-          return require('./zenoh-node.linux-arm64-musl.node')
+          return require('./pager.linux-arm64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@diskette/zenoh-node-linux-arm64-musl')
-          const bindingPackageVersion = require('@diskette/zenoh-node-linux-arm64-musl/package.json').version
+          const binding = require('@diskette/pager-linux-arm64-musl')
+          const bindingPackageVersion = require('@diskette/pager-linux-arm64-musl/package.json').version
           if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -318,13 +318,13 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./zenoh-node.linux-arm64-gnu.node')
+          return require('./pager.linux-arm64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@diskette/zenoh-node-linux-arm64-gnu')
-          const bindingPackageVersion = require('@diskette/zenoh-node-linux-arm64-gnu/package.json').version
+          const binding = require('@diskette/pager-linux-arm64-gnu')
+          const bindingPackageVersion = require('@diskette/pager-linux-arm64-gnu/package.json').version
           if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -336,13 +336,13 @@ function requireNative() {
     } else if (process.arch === 'arm') {
       if (isMusl()) {
         try {
-          return require('./zenoh-node.linux-arm-musleabihf.node')
+          return require('./pager.linux-arm-musleabihf.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@diskette/zenoh-node-linux-arm-musleabihf')
-          const bindingPackageVersion = require('@diskette/zenoh-node-linux-arm-musleabihf/package.json').version
+          const binding = require('@diskette/pager-linux-arm-musleabihf')
+          const bindingPackageVersion = require('@diskette/pager-linux-arm-musleabihf/package.json').version
           if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -352,13 +352,13 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./zenoh-node.linux-arm-gnueabihf.node')
+          return require('./pager.linux-arm-gnueabihf.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@diskette/zenoh-node-linux-arm-gnueabihf')
-          const bindingPackageVersion = require('@diskette/zenoh-node-linux-arm-gnueabihf/package.json').version
+          const binding = require('@diskette/pager-linux-arm-gnueabihf')
+          const bindingPackageVersion = require('@diskette/pager-linux-arm-gnueabihf/package.json').version
           if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -370,13 +370,13 @@ function requireNative() {
     } else if (process.arch === 'loong64') {
       if (isMusl()) {
         try {
-          return require('./zenoh-node.linux-loong64-musl.node')
+          return require('./pager.linux-loong64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@diskette/zenoh-node-linux-loong64-musl')
-          const bindingPackageVersion = require('@diskette/zenoh-node-linux-loong64-musl/package.json').version
+          const binding = require('@diskette/pager-linux-loong64-musl')
+          const bindingPackageVersion = require('@diskette/pager-linux-loong64-musl/package.json').version
           if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -386,13 +386,13 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./zenoh-node.linux-loong64-gnu.node')
+          return require('./pager.linux-loong64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@diskette/zenoh-node-linux-loong64-gnu')
-          const bindingPackageVersion = require('@diskette/zenoh-node-linux-loong64-gnu/package.json').version
+          const binding = require('@diskette/pager-linux-loong64-gnu')
+          const bindingPackageVersion = require('@diskette/pager-linux-loong64-gnu/package.json').version
           if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -404,13 +404,13 @@ function requireNative() {
     } else if (process.arch === 'riscv64') {
       if (isMusl()) {
         try {
-          return require('./zenoh-node.linux-riscv64-musl.node')
+          return require('./pager.linux-riscv64-musl.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@diskette/zenoh-node-linux-riscv64-musl')
-          const bindingPackageVersion = require('@diskette/zenoh-node-linux-riscv64-musl/package.json').version
+          const binding = require('@diskette/pager-linux-riscv64-musl')
+          const bindingPackageVersion = require('@diskette/pager-linux-riscv64-musl/package.json').version
           if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -420,13 +420,13 @@ function requireNative() {
         }
       } else {
         try {
-          return require('./zenoh-node.linux-riscv64-gnu.node')
+          return require('./pager.linux-riscv64-gnu.node')
         } catch (e) {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@diskette/zenoh-node-linux-riscv64-gnu')
-          const bindingPackageVersion = require('@diskette/zenoh-node-linux-riscv64-gnu/package.json').version
+          const binding = require('@diskette/pager-linux-riscv64-gnu')
+          const bindingPackageVersion = require('@diskette/pager-linux-riscv64-gnu/package.json').version
           if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -437,13 +437,13 @@ function requireNative() {
       }
     } else if (process.arch === 'ppc64') {
       try {
-        return require('./zenoh-node.linux-ppc64-gnu.node')
+        return require('./pager.linux-ppc64-gnu.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-linux-ppc64-gnu')
-        const bindingPackageVersion = require('@diskette/zenoh-node-linux-ppc64-gnu/package.json').version
+        const binding = require('@diskette/pager-linux-ppc64-gnu')
+        const bindingPackageVersion = require('@diskette/pager-linux-ppc64-gnu/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -453,13 +453,13 @@ function requireNative() {
       }
     } else if (process.arch === 's390x') {
       try {
-        return require('./zenoh-node.linux-s390x-gnu.node')
+        return require('./pager.linux-s390x-gnu.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-linux-s390x-gnu')
-        const bindingPackageVersion = require('@diskette/zenoh-node-linux-s390x-gnu/package.json').version
+        const binding = require('@diskette/pager-linux-s390x-gnu')
+        const bindingPackageVersion = require('@diskette/pager-linux-s390x-gnu/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -473,13 +473,13 @@ function requireNative() {
   } else if (process.platform === 'openharmony') {
     if (process.arch === 'arm64') {
       try {
-        return require('./zenoh-node.openharmony-arm64.node')
+        return require('./pager.openharmony-arm64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-openharmony-arm64')
-        const bindingPackageVersion = require('@diskette/zenoh-node-openharmony-arm64/package.json').version
+        const binding = require('@diskette/pager-openharmony-arm64')
+        const bindingPackageVersion = require('@diskette/pager-openharmony-arm64/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -489,13 +489,13 @@ function requireNative() {
       }
     } else if (process.arch === 'x64') {
       try {
-        return require('./zenoh-node.openharmony-x64.node')
+        return require('./pager.openharmony-x64.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-openharmony-x64')
-        const bindingPackageVersion = require('@diskette/zenoh-node-openharmony-x64/package.json').version
+        const binding = require('@diskette/pager-openharmony-x64')
+        const bindingPackageVersion = require('@diskette/pager-openharmony-x64/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -505,13 +505,13 @@ function requireNative() {
       }
     } else if (process.arch === 'arm') {
       try {
-        return require('./zenoh-node.openharmony-arm.node')
+        return require('./pager.openharmony-arm.node')
       } catch (e) {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@diskette/zenoh-node-openharmony-arm')
-        const bindingPackageVersion = require('@diskette/zenoh-node-openharmony-arm/package.json').version
+        const binding = require('@diskette/pager-openharmony-arm')
+        const bindingPackageVersion = require('@diskette/pager-openharmony-arm/package.json').version
         if (bindingPackageVersion !== '0.0.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.0.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -543,7 +543,7 @@ if (!nativeBinding || forceWasi) {
   let wasiBinding = null
   let wasiBindingError = null
   try {
-    wasiBinding = require('./zenoh-node.wasi.cjs')
+    wasiBinding = require('./pager.wasi.cjs')
     nativeBinding = wasiBinding
   } catch (err) {
     if (forceWasi) {
@@ -552,7 +552,7 @@ if (!nativeBinding || forceWasi) {
   }
   if (!nativeBinding || forceWasi) {
     try {
-      wasiBinding = require('@diskette/zenoh-node-wasm32-wasi')
+      wasiBinding = require('@diskette/pager-wasm32-wasi')
       nativeBinding = wasiBinding
     } catch (err) {
       if (forceWasi) {

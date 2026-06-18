@@ -1,4 +1,4 @@
-# `zenoh-node`
+# `@diskette/pager`
 
 TODO: description
 
