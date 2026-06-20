@@ -11,6 +11,8 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
 
+    "types": ["node"],
+
     "strict": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,

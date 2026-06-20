@@ -32,6 +32,7 @@
     "@emnapi/core": "^1.11.1",
     "@emnapi/runtime": "^1.11.1",
     "@napi-rs/cli": "^3.7.2",
+    "@types/node": "^25.9.3",
     "oxfmt": "^0.55.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
