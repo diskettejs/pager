@@ -194,6 +194,10 @@ impl AsyncGenerator for Scout {
 /// * `handler` - Optional channel handler (FIFO or Ring) backing delivery.
 ///   Defaults to FIFO.
 #[napi]
+// Reachable only through napi's load-time `ctor!` registration glue, which
+// rust-analyzer's dead-code analysis doesn't trace (a cdylib has no Rust-`pub`
+// exports); `cargo check` sees it as used. Silences the RA false positive.
+#[allow(dead_code)]
 pub async fn scout(
   what: Vec<WhatAmI>,
   config: &Config,
