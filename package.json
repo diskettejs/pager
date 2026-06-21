@@ -6,6 +6,7 @@
     "build:debug": "pnpm --filter \"./packages/**\" build:debug",
     "build": "pnpm --filter \"./packages/**\" build",
     "test": "pnpm --filter \"./packages/**\" test",
+    "typecheck": "pnpm --filter \"./packages/**\" typecheck",
     "lint": "cargo fmt && cargo clippy",
     "fmt:js": "oxfmt",
     "fmt:rs": "cargo fmt"

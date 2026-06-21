@@ -25,7 +25,8 @@
     "build:debug": "napi build --esm --platform",
     "prepublishOnly": "napi prepublish -t npm",
     "version": "napi version",
-    "test": "vitest"
+    "test": "vitest",
+    "typecheck": "tsc"
   },
   "devDependencies": {
     "@emnapi/core": "^1.11.1",

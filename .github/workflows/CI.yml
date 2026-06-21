@@ -45,6 +45,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: TypeCheck
+        run: pnpm typecheck
+
       - name: Cargo fmt
         run: cargo fmt -- --check
 
@@ -119,7 +122,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: packages/dialtone/${{ env.APP_NAME }}.*.node
+          path: packages/*/*.node
           if-no-files-found: error
   test-macOS-windows-binding:
     name: Test bindings on ${{ matrix.settings.target }} - node@${{ matrix.node }}
