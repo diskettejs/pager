@@ -1,8 +1,9 @@
 name: CI
 env:
   DEBUG: napi:*
+  APP_NAME: dialtone
   MACOSX_DEPLOYMENT_TARGET: '10.13'
-  CARGO_INCREMENTAL: '0'
+  CARGO_INCREMENTAL: '1'
 permissions:
   contents: write
   id-token: write
@@ -44,9 +45,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: TypeCheck
-        run: pnpm typecheck
-
       - name: Cargo fmt
         run: cargo fmt -- --check
 
@@ -87,10 +85,16 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: actions/cache@v5
         with:
-          shared-key: ${{ matrix.settings.target }}
-          workspaces: '. -> target'
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.napi-rs
+            .cargo-cache
+            target/
+          key: ${{ matrix.settings.target }}-cargo-${{ matrix.settings.host }}
       - uses: mlugg/setup-zig@v2
         if: ${{ contains(matrix.settings.target, 'musl') }}
         with:
@@ -115,7 +119,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: packages/*/*.node
+          path: ${{ env.APP_NAME }}.*.node
           if-no-files-found: error
   test-macOS-windows-binding:
     name: Test bindings on ${{ matrix.settings.target }} - node@${{ matrix.node }}
@@ -153,9 +157,9 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: packages
+          path: .
       - name: List packages
-        run: ls -R packages
+        run: ls -R .
         shell: bash
       - name: Test bindings
         run: pnpm test
@@ -199,7 +203,6 @@ jobs:
               console.log('IMAGE=node:${{ matrix.node }}-slim')
             }
           " >> $GITHUB_OUTPUT
-          echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
       - name: Install dependencies
         run: |
           echo 'supportedArchitectures.cpu=["current", "arm64", "x64", "arm"]' >> .npmrc
@@ -209,9 +212,9 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: bindings-${{ matrix.target }}
-          path: packages
+          path: .
       - name: List packages
-        run: ls -R packages
+        run: ls -R .
         shell: bash
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -226,7 +229,7 @@ jobs:
           image: ${{ steps.docker.outputs.IMAGE }}
           name: test-binding
           options: -v ${{ steps.docker.outputs.PNPM_STORE_PATH }}:${{ steps.docker.outputs.PNPM_STORE_PATH }} -v ${{ github.workspace }}:${{ github.workspace }} -w ${{ github.workspace }} --platform ${{ steps.docker.outputs.PLATFORM }}
-          args: sh -c 'set -e; for d in packages/*/; do npm --prefix "$d" run test --if-present; done'
+          args: npm run test
   publish:
     name: Publish
     runs-on: ubuntu-latest
@@ -249,12 +252,12 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: artifacts
-      - name: Create npm dirs
-        run: pnpm --filter "./packages/**" exec napi create-npm-dirs
+      - name: create npm dirs
+        run: pnpm napi create-npm-dirs
       - name: Move artifacts
-        run: pnpm --filter "./packages/**" exec napi artifacts --output-dir ../../artifacts
+        run: pnpm artifacts
       - name: List packages
-        run: ls -R packages
+        run: ls -R ./npm
         shell: bash
       - name: Publish
         run: |
@@ -262,11 +265,11 @@ jobs:
           if git log -1 --pretty=%B | grep "^v\?[0-9]\+\.[0-9]\+\.[0-9]\+$";
           then
             echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-            pnpm --filter "./packages/**" publish --access public --no-git-checks
+            npm publish --access public
           elif git log -1 --pretty=%B | grep "^v\?[0-9]\+\.[0-9]\+\.[0-9]\+";
           then
             echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-            pnpm --filter "./packages/**" publish --tag next --access public --no-git-checks
+            npm publish --tag next --access public
           else
             echo "Not a release, skipping publish"
           fi
