@@ -1,7 +1,6 @@
 name: CI
 env:
   DEBUG: napi:*
-  APP_NAME: dialtone
   MACOSX_DEPLOYMENT_TARGET: '10.13'
   CARGO_INCREMENTAL: '1'
 permissions:
@@ -160,9 +159,9 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: packages/dialtone
+          path: packages
       - name: List packages
-        run: ls -R packages/dialtone
+        run: ls -R packages
         shell: bash
       - name: Test bindings
         run: pnpm test
@@ -206,6 +205,7 @@ jobs:
               console.log('IMAGE=node:${{ matrix.node }}-slim')
             }
           " >> $GITHUB_OUTPUT
+          echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
       - name: Install dependencies
         run: |
           echo 'supportedArchitectures.cpu=["current", "arm64", "x64", "arm"]' >> .npmrc
@@ -215,9 +215,9 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: bindings-${{ matrix.target }}
-          path: packages/dialtone
+          path: packages
       - name: List packages
-        run: ls -R packages/dialtone
+        run: ls -R packages
         shell: bash
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -232,7 +232,7 @@ jobs:
           image: ${{ steps.docker.outputs.IMAGE }}
           name: test-binding
           options: -v ${{ steps.docker.outputs.PNPM_STORE_PATH }}:${{ steps.docker.outputs.PNPM_STORE_PATH }} -v ${{ github.workspace }}:${{ github.workspace }} -w ${{ github.workspace }} --platform ${{ steps.docker.outputs.PLATFORM }}
-          args: npm --prefix packages/dialtone run test
+          args: sh -c "set -e; for d in packages/*/; do npm --prefix $d run test --if-present; done"
   publish:
     name: Publish
     runs-on: ubuntu-latest
@@ -254,29 +254,25 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
-          path: packages/dialtone/artifacts
-      - name: create npm dirs
-        run: pnpm napi create-npm-dirs
-        working-directory: packages/dialtone
+          path: artifacts
+      - name: Create npm dirs
+        run: pnpm --filter "./packages/**" exec napi create-npm-dirs
       - name: Move artifacts
-        run: pnpm artifacts
-        working-directory: packages/dialtone
+        run: pnpm --filter "./packages/**" exec napi artifacts --output-dir "$GITHUB_WORKSPACE/artifacts"
       - name: List packages
-        run: ls -R ./npm
+        run: ls -R packages
         shell: bash
-        working-directory: packages/dialtone
       - name: Publish
-        working-directory: packages/dialtone
         run: |
           npm config set provenance true
           if git log -1 --pretty=%B | grep "^v\?[0-9]\+\.[0-9]\+\.[0-9]\+$";
           then
             echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-            npm publish --access public
+            pnpm --filter "./packages/**" publish --access public --no-git-checks
           elif git log -1 --pretty=%B | grep "^v\?[0-9]\+\.[0-9]\+\.[0-9]\+";
           then
             echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-            npm publish --tag next --access public
+            pnpm --filter "./packages/**" publish --tag next --access public --no-git-checks
           else
             echo "Not a release, skipping publish"
           fi
