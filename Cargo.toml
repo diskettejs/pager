@@ -12,6 +12,6 @@ zenoh = { version = "1.9.0", features = ["unstable", "internal"] }
 zenoh-ext = { version = "1.9.0", features = ["unstable"] }
 
 [profile.release]
-lto = true
+lto = "thin"
 strip = "symbols"
 
