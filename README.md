@@ -2,7 +2,7 @@
 
 Node.js native bindings for [Zenoh](https://zenoh.io) — a pub/sub/query protocol — built with [NAPI-RS](https://napi.rs).
 
-The bindings mirror Zenoh's surface as faithfully as the JS boundary allows: the operations, options, and lifecycle semantics are Zenoh's. Advanced pub/sub (from `zenoh-ext`) is folded into the regular `Publisher`/`Subscriber` surface — every declared publisher and subscriber is an advanced one. This package is **Node.js only**; there are no WASM/WASI builds for the browser.
+The bindings mirror **Zenoh 1.9**'s surface as faithfully as the JS boundary allows: the operations, options, and lifecycle semantics are Zenoh's. Advanced pub/sub (from `zenoh-ext`) is folded into the regular `Publisher`/`Subscriber` surface — every declared publisher and subscriber is an advanced one. This package is **Node.js only**; there are no WASM/WASI builds for the browser.
 
 ## Install
 
@@ -13,6 +13,12 @@ pnpm add @diskette/dialtone
 ```ts
 import { Session } from '@diskette/dialtone'
 ```
+
+## Requirements
+
+- **Node.js ≥ 20.4** — the disposal helpers (`using` / `await using`) rely on `Symbol.dispose` / `Symbol.asyncDispose`, available from Node 20.4. The runtime API itself works on older Node, but explicit resource management does not.
+- **TypeScript ≥ 5.2** (or an equivalent transpiler/bundler) if you use the `using` / `await using` syntax shown throughout these examples.
+- Prebuilt native binaries ship for x86_64 Windows, x86_64 / arm64 macOS, and x86_64 Linux (glibc).
 
 ## Quick start
 
@@ -44,7 +50,7 @@ for await (const sample of subscriber) {
 
 ---
 
-# API Reference
+## API Reference
 
 ## Exports at a glance
 
@@ -63,8 +69,8 @@ for await (const sample of subscriber) {
 | [`Replies`](#replies)                                                         | class            | Delivers [`ReplySample`](#replysample) / [`ReplyError`](#replyerror) for a `get`. |
 | [`ReplySample`](#replysample) / [`ReplyError`](#replyerror)                   | class            | The two arms of a query reply.                                                    |
 | [`Liveliness`](#liveliness) / [`LivelinessToken`](#livelinesstoken)           | class            | Declare, query, and subscribe to liveliness.                                      |
-| [`MatchingListener`](#matchinglistener) / [`MatchingStatus`](#matchingstatus) | class / type     | Notifications about whether matching entities exist.                              |
-| [`SampleMissListener`](#samplemisslistener) / [`Miss`](#miss)                 | class / type     | Notifications of missed samples (advanced subscribers).                           |
+| [`MatchingListener`](#matchinglistener) / [`MatchingStatus`](#matchingstatus) | class / interface | Notifications about whether matching entities exist.                              |
+| [`SampleMissListener`](#samplemisslistener) / [`Miss`](#miss)                 | class / interface | Notifications of missed samples (advanced subscribers).                           |
 | [`scout`](#scout) / [`Scout`](#scout-class) / [`Hello`](#hello)               | function / class | Discover Zenoh nodes on the network.                                              |
 | Option interfaces & enums                                                     | types            | See [Options](#options) and [Enums & string unions](#enums--string-unions).       |
 
@@ -395,6 +401,8 @@ class Querier {
 }
 ```
 
+> The reply-key-expression getter is spelled `acceptReplies` here but `acceptsReplies` on [`Query`](#query) — both faithfully mirror Zenoh's own naming.
+
 ---
 
 ## Advanced pub/sub
@@ -566,6 +574,19 @@ Every declared entity exposes `undeclare()` (or `stop()` for a scout, `close()` 
 
 ---
 
+## Errors
+
+Operations that can fail surface Zenoh's `Result` as a thrown JavaScript `Error` — async methods reject the returned `Promise`. The library does not swallow or soften these; a Zenoh error is a Zenoh error. The cases worth knowing:
+
+- **`new KeyExpr(...)`** throws on a non-canon key expression; **`KeyExpr.autocanonize`** throws only if the input is not a valid key expression even after canonization.
+- **`Session.open` / `put` / `delete` / `get` / `declare*`** reject if the session is closed or the operation fails in Zenoh.
+- **`tryRecv()`** throws once the channel has closed, so a polling loop can tell "nothing yet" (returns `null`) from "done" (throws) — see [Channels & async iteration](#channels--async-iteration). `recv()` does not throw at end of stream; it resolves to `null`.
+- Operations on an entity after **`undeclare()`** — or on a session after **`close()`** — error.
+- **`declareSubscriber`** rejects when a [`RecoveryConfig`](#recoveryconfig) sets neither or both of its mutually-exclusive modes (validated at declaration time).
+- **`Subscriber.sampleMissListener`** and **`Subscriber.detectPublishers`** reject when called on a liveliness subscriber.
+
+---
+
 ## Options
 
 ### PutOptions
@@ -586,7 +607,7 @@ For [`Session.put`](#session).
 
 ### DeleteOptions
 
-For [`Session.delete`](#session). Same as [`PutOptions`](#putoptions) minus `encoding`: `attachment`, `congestionControl` (default `Drop`), `priority` (`Data`), `express`, `reliability` (`Reliable`), `allowedDestination` (`Any`), `timestamp`, `sourceInfo`.
+For [`Session.delete`](#session). Same fields as [`PutOptions`](#putoptions) minus `encoding`; defaults as documented there.
 
 ### GetOptions
 
@@ -627,11 +648,17 @@ For [`Session.declarePublisher`](#session). These are fixed for the publisher's 
 
 ### PublisherPutOptions
 
-For [`Publisher.put`](#publisher): `encoding` (overrides the publisher default), `attachment`, `timestamp` (overrides the publisher's automatic timestamp).
+For [`Publisher.put`](#publisher).
+
+| Field        | Type                      | Default | Notes                                          |
+| ------------ | ------------------------- | ------- | ---------------------------------------------- |
+| `encoding`   | `string`                  | —       | Overrides the publisher's default encoding.    |
+| `attachment` | `string \| Uint8Array`    | —       | Carried alongside the payload.                 |
+| `timestamp`  | [`Timestamp`](#timestamp) | —       | Overrides the publisher's automatic timestamp. |
 
 ### PublisherDeleteOptions
 
-For [`Publisher.delete`](#publisher): `attachment`, `timestamp`.
+For [`Publisher.delete`](#publisher). Same fields as [`PublisherPutOptions`](#publisherputoptions) minus `encoding`: `attachment` and `timestamp`.
 
 ### SubscriberOptions
 
@@ -674,23 +701,49 @@ For [`Session.declareQuerier`](#session). Fixed for the querier's lifetime; per-
 
 ### QuerierGetOptions
 
-For [`Querier.get`](#querier): `parameters` (the part after `?`), `payload`, `encoding`, `attachment`, `sourceInfo`, `handler`.
+For [`Querier.get`](#querier). Per-`get`, only the payload and parameters vary; QoS is fixed by [`QuerierOptions`](#querieroptions).
+
+| Field        | Type                                | Default | Notes                                     |
+| ------------ | ----------------------------------- | ------- | ----------------------------------------- |
+| `parameters` | `string`                            | —       | Selector parameters (the part after `?`). |
+| `payload`    | `string \| Uint8Array`              | —       | Sent alongside the query.                 |
+| `encoding`   | `string`                            | —       | Encoding of the query payload.            |
+| `attachment` | `string \| Uint8Array`              | —       |                                           |
+| `sourceInfo` | [`SourceInfo`](#sourceinfo)         | —       | Producing entity + sequence number.       |
+| `handler`    | [`ChannelHandler`](#channelhandler) | FIFO    | Backs reply delivery.                     |
 
 ### ReplyOptions / ReplyErrOptions / ReplyDelOptions
 
-For the [`Query`](#query) reply methods.
+For the [`Query`](#query) reply methods. `ReplyOptions` (`reply`):
 
-- **`ReplyOptions`** (`reply`): `encoding`, `attachment`, `express`, `timestamp`, `sourceInfo`.
-- **`ReplyErrOptions`** (`replyErr`): `encoding`.
-- **`ReplyDelOptions`** (`replyDel`): `attachment`, `express`, `timestamp`, `sourceInfo`.
+| Field        | Type                        | Default | Notes                                             |
+| ------------ | --------------------------- | ------- | ------------------------------------------------- |
+| `encoding`   | `string`                    | —       | Encoding of the reply payload.                    |
+| `attachment` | `string \| Uint8Array`      | —       | Carried alongside the reply.                      |
+| `express`    | `boolean`                   | `false` | Send unbatched (lower latency, lower throughput). |
+| `timestamp`  | [`Timestamp`](#timestamp)   | —       | From [`Session.newTimestamp`](#session).          |
+| `sourceInfo` | [`SourceInfo`](#sourceinfo) | —       | Producing entity + sequence number.               |
+
+- **`ReplyErrOptions`** (`replyErr`): only `encoding` — the encoding of the error payload.
+- **`ReplyDelOptions`** (`replyDel`): same fields as `ReplyOptions` minus `encoding` — `attachment`, `express`, `timestamp`, `sourceInfo`.
 
 ### LivelinessSubscriberOptions
 
-For [`Liveliness.declareSubscriber`](#liveliness): `history` (`boolean`, default `false` — when `true`, query the network for currently-live tokens on declaration, delivering each as a `Put`), `handler`.
+For [`Liveliness.declareSubscriber`](#liveliness).
+
+| Field     | Type                                | Default | Notes                                                                                                                                                           |
+| --------- | ----------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `history` | `boolean`                           | `false` | When `true`, query the network for currently-live tokens on declaration, delivering each as a `Put`. Even when `false`, currently-live tokens may still arrive. |
+| `handler` | [`ChannelHandler`](#channelhandler) | FIFO    | Backs delivery.                                                                                                                                                 |
 
 ### LivelinessGetOptions
 
-For [`Liveliness.get`](#liveliness): `timeout` (ms; defaults to the session's configured query timeout), `handler`.
+For [`Liveliness.get`](#liveliness).
+
+| Field     | Type                                | Default | Notes                                                                                  |
+| --------- | ----------------------------------- | ------- | -------------------------------------------------------------------------------------- |
+| `timeout` | `number`                            | —       | Milliseconds to wait for replies; defaults to the session's configured query timeout.  |
+| `handler` | [`ChannelHandler`](#channelhandler) | FIFO    | Backs reply delivery.                                                                  |
 
 ### CacheConfig
 
@@ -703,7 +756,13 @@ Attaches a cache to a publisher so matching subscribers can recover history and/
 
 ### RepliesConfig
 
-QoS applied to the samples a publisher's cache sends back: `priority` (default `Data`), `congestionControl` (default `Block`), `express`.
+QoS applied to the samples a publisher's cache sends back when a subscriber queries history or recovers missed samples.
+
+| Field               | Type                                      | Default | Notes                             |
+| ------------------- | ----------------------------------------- | ------- | --------------------------------- |
+| `priority`          | [`Priority`](#priority)                   | `Data`  |                                   |
+| `congestionControl` | [`CongestionControl`](#congestioncontrol) | `Block` |                                   |
+| `express`           | `boolean`                                 | `false` | Reply samples are sent unbatched. |
 
 ### MissDetectionConfig
 
@@ -711,23 +770,29 @@ Enables sample-miss detection on a publisher (per-publisher sequence numbers). O
 
 ### HeartbeatConfig
 
-| Field      | Type      | Notes                                                                                                          |
-| ---------- | --------- | -------------------------------------------------------------------------------------------------------------- |
-| `periodMs` | `number`  | Heartbeat period, in milliseconds.                                                                             |
-| `sporadic` | `boolean` | When `true`, advertise the sequence number only when it changed (`sporadicHeartbeat`); otherwise every period. |
+| Field      | Type      | Default    | Notes                                                                                                           |
+| ---------- | --------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
+| `periodMs` | `number`  | _required_ | Heartbeat period, in milliseconds.                                                                              |
+| `sporadic` | `boolean` | `false`    | When `true`, advertise the sequence number only when it changed (`sporadicHeartbeat`); otherwise every period. |
 
 ### HistoryConfig
 
-Enables a subscriber to query for historical samples on startup (served by publishers that enable `cache`): `detectLatePublishers` (`boolean`), `maxSamples` (`number`, per resource), `maxAgeSecs` (`number`).
+Enables a subscriber to query for historical samples on startup (served by publishers that enable `cache`).
+
+| Field                  | Type      | Default | Notes                                                                    |
+| ---------------------- | --------- | ------- | ------------------------------------------------------------------------ |
+| `detectLatePublishers` | `boolean` | —       | Detect late-joining publishers (via liveliness) and query their history. |
+| `maxSamples`           | `number`  | —       | Query at most this many samples per resource.                            |
+| `maxAgeSecs`           | `number`  | —       | Query only samples no older than this many seconds.                      |
 
 ### RecoveryConfig
 
 Configures recovery of detected lost samples. Exactly **one** mode must be set — they are mutually exclusive, checked at declaration time:
 
-| Field               | Type      | Notes                                                    |
-| ------------------- | --------- | -------------------------------------------------------- |
-| `heartbeat`         | `boolean` | Recover by subscribing to publisher heartbeats.          |
-| `periodicQueriesMs` | `number`  | Recover by querying for missed samples on this interval. |
+| Field               | Type      | Default | Notes                                                    |
+| ------------------- | --------- | ------- | -------------------------------------------------------- |
+| `heartbeat`         | `boolean` | —       | Recover by subscribing to publisher heartbeats.          |
+| `periodicQueriesMs` | `number`  | —       | Recover by querying for missed samples on this interval. |
 
 Recovery requires the matching publisher to enable both `cache` and `sampleMissDetection`.
 
@@ -815,23 +880,3 @@ Highest → lowest, default `Data`:
 ### WhatAmI
 
 `'Router'` · `'Peer'` (default mode) · `'Client'`.
-
----
-
-## Release package
-
-Ensure you have set your **NPM_TOKEN** in the `GitHub` project setting.
-
-In `Settings -> Secrets`, add **NPM_TOKEN** into it.
-
-When you want to release the package:
-
-```bash
-npm version [<newversion> | major | minor | patch | premajor | preminor | prepatch | prerelease [--preid=<prerelease-id>] | from-git]
-
-git push
-```
-
-GitHub actions will do the rest job for you.
-
-> WARN: Don't run `npm publish` manually.
