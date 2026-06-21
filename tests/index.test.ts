@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { Config, KeyExpr, Session } from '../index.js'
+import { Config, KeyExpr, scout, Session } from '../index.js'
 
 test('Config factory methods construct instances', () => {
   expect(Config.default()).toBeInstanceOf(Config)
@@ -330,4 +330,81 @@ test('a KeyExpr is accepted anywhere a string key expression is', async () => {
 
   subscriber.undeclare()
   await session.close()
+}, 15_000)
+
+test('Liveliness: a token appears as Put and vanishes as Delete to a subscriber', async () => {
+  const session = await Session.open()
+  const liveliness = session.liveliness()
+
+  const subscriber = await liveliness.declareSubscriber('demo/zenoh-ts/liveliness/**')
+  const token = await liveliness.declareToken('demo/zenoh-ts/liveliness/token')
+
+  // The token appearing is delivered as a `Put` for its key expression.
+  const appeared = await subscriber.recv()
+  expect(appeared).not.toBeNull()
+  expect(appeared!.kind).toBe('Put')
+  expect(appeared!.keyExpr.toString()).toBe('demo/zenoh-ts/liveliness/token')
+
+  // Undeclaring the token is delivered as a `Delete` for the same key.
+  token.undeclare()
+  const vanished = await subscriber.recv()
+  expect(vanished).not.toBeNull()
+  expect(vanished!.kind).toBe('Delete')
+  expect(vanished!.keyExpr.toString()).toBe('demo/zenoh-ts/liveliness/token')
+
+  subscriber.undeclare()
+  await session.close()
+}, 15_000)
+
+test('Liveliness.get reports currently-live tokens', async () => {
+  const session = await Session.open()
+  const liveliness = session.liveliness()
+
+  const token = await liveliness.declareToken('demo/zenoh-ts/liveliness/get')
+
+  const replies = await liveliness.get('demo/zenoh-ts/liveliness/**', { timeout: 5_000 })
+  const keys: string[] = []
+  for await (const reply of replies) {
+    if (reply.sample) keys.push(reply.sample.keyExpr.toString())
+  }
+  expect(keys).toContain('demo/zenoh-ts/liveliness/get')
+
+  token.undeclare()
+  await session.close()
+}, 15_000)
+
+test('scout yields Hellos and stops cleanly', async () => {
+  // Open a session so there is a discoverable node on the local network.
+  const session = await Session.open()
+
+  const handle = await scout(['Peer', 'Router', 'Client'], Config.default())
+
+  // Discovery is best-effort (multicast may be unavailable in some sandboxes),
+  // so race the first Hello against a short timeout and only assert its shape
+  // when one actually arrives.
+  const hello = await Promise.race([
+    handle.recv(),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_000)),
+  ])
+  if (hello) {
+    expect(['Router', 'Peer', 'Client']).toContain(hello.whatami)
+    expect(typeof hello.zid).toBe('string')
+    expect(Array.isArray(hello.locators)).toBe(true)
+  }
+
+  // Stopping closes the channel: tryRecv must then throw, distinct from "empty".
+  handle.stop()
+  expect(() => handle.tryRecv()).toThrow()
+
+  await session.close()
+}, 15_000)
+
+test('scout accepts an empty matcher (scout all) and a Ring handler', async () => {
+  const handle = await scout([], Config.default(), { kind: 'Ring', capacity: 4 })
+
+  // Before stopping, a non-blocking poll yields a buffered Hello or null, never throws.
+  const first = handle.tryRecv()
+  expect(first === null || typeof first === 'object').toBe(true)
+
+  handle.stop()
 }, 15_000)

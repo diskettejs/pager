@@ -21,6 +21,21 @@ export declare class Config {
 }
 
 /**
+ * A `Hello` message received while scouting: a discovered node's identity, kind,
+ * and where it can be reached.
+ *
+ * Fields are exposed as lazy getters, mirroring `zenoh::scouting::Hello`.
+ */
+export declare class Hello {
+  /** The kind of node that sent this `Hello`. */
+  get whatami(): WhatAmI
+  /** The Zenoh ID of the node, as a hex string. */
+  get zid(): string
+  /** The locators at which the node can be reached. */
+  get locators(): Array<string>
+}
+
+/**
  * A Zenoh key expression: a `/`-separated expression that addresses a set of
  * keys (mirrors `zenoh::key_expr::KeyExpr`).
  *
@@ -57,6 +72,58 @@ export declare class KeyExpr {
   concat(other: string): KeyExpr
   /** The canon string form of this key expression. */
   toString(): string
+}
+
+/**
+ * Declares liveliness tokens, queries existing ones, and subscribes to
+ * liveliness changes (mirrors `zenoh`'s `Liveliness`).
+ *
+ * A [`LivelinessToken`] is a token whose liveliness is tied to the [`Session`]
+ * that declared it and can be monitored by remote applications. Obtain this
+ * accessor with [`Session::liveliness`].
+ *
+ * [`Session`]: crate::session::Session
+ */
+export declare class Liveliness {
+  /**
+   * Declare a [`LivelinessToken`] for `key_expr`. The token is seen as alive by
+   * any application monitoring it until it is undeclared or dropped (or this
+   * session loses connectivity / stops).
+   */
+  declareToken(keyExpr: string | KeyExpr): Promise<LivelinessToken>
+  /**
+   * Declare a [`Subscriber`] for liveliness changes matching `key_expr`. Each
+   * sample is a `Put` when a matching token appears and a `Delete` when one
+   * vanishes. Samples are delivered through a FIFO channel, consumable as an
+   * async iterator or via `recv`/`tryRecv`.
+   */
+  declareSubscriber(keyExpr: string | KeyExpr, options?: LivelinessSubscriberOptions | undefined | null): Promise<Subscriber>
+  /**
+   * Query liveliness tokens whose key expression matches `key_expr`, receiving
+   * the matching tokens' replies through a channel, consumable as an async
+   * iterator or via `recv`/`tryRecv`.
+   */
+  get(keyExpr: string | KeyExpr, options?: LivelinessGetOptions | undefined | null): Promise<Replies>
+}
+
+/**
+ * A token whose liveliness is tied to the Zenoh [`Session`] that declared it.
+ *
+ * While the token is not undeclared or dropped — and while the declaring
+ * application is alive and has connectivity with the monitoring application —
+ * any application monitoring it (via [`Liveliness::declareSubscriber`] or
+ * [`Liveliness::get`]) sees it as alive. Tokens are automatically undeclared
+ * when dropped. Create one with [`Liveliness::declareToken`].
+ *
+ * [`Session`]: crate::session::Session
+ */
+export declare class LivelinessToken {
+  /**
+   * Undeclare this liveliness token, so monitoring applications stop seeing it
+   * as alive. Subsequent calls are no-ops. Resolves synchronously, so awaiting
+   * the returned value is optional.
+   */
+  undeclare(): void
 }
 
 /**
@@ -337,6 +404,36 @@ export declare class Sample {
 }
 
 /**
+ * A scout that delivers [`Hello`] messages through a channel.
+ *
+ * Consume it with `for await (const hello of scout)`, or pull messages
+ * individually with `recv()` / `tryRecv()`. Iteration ends (yields `null`)
+ * once the scout is stopped — its buffered messages are dropped with the
+ * handler, as in zenoh.
+ *
+ * This type implements JavaScript's async iterable protocol.
+ * It can be used with `for await...of` loops.
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_async_iterator_and_async_iterable_protocols
+ */
+export declare class Scout {
+  /** Wait for the next `Hello`, resolving to `null` once the scout is stopped. */
+  recv(): Promise<Hello | null>
+  /**
+   * Return a buffered `Hello` if one is immediately available, or `null` if the
+   * channel is currently empty. Throws once the scout has been stopped, letting
+   * a polling loop tell "nothing yet" apart from "stopped".
+   */
+  tryRecv(): Hello | null
+  /**
+   * Stop scouting. Iteration / `recv` then end and `tryRecv` throws; any
+   * buffered messages are dropped with the handler. Resolves synchronously.
+   */
+  stop(): void
+  [Symbol.asyncIterator](): AsyncGenerator<Hello, void, undefined>
+}
+
+/**
  * An open connection to the Zenoh network — the entry point from which every
  * publisher, subscriber, and query is declared. Close it with `close`.
  */
@@ -383,6 +480,11 @@ export declare class Session {
    * key, with query settings fixed here at declaration time.
    */
   declareQuerier(keyExpr: string | KeyExpr, options?: QuerierOptions | undefined | null): Promise<Querier>
+  /**
+   * Access this session's liveliness API: declare liveliness tokens, query
+   * existing ones, and subscribe to liveliness changes.
+   */
+  liveliness(): Liveliness
   /** Create a new timestamp using this session's hybrid logical clock. */
   newTimestamp(): Timestamp
   /** Access information about this session and the nodes it is connected to. */
@@ -538,6 +640,29 @@ export interface GetOptions {
   /** Source metadata (producing entity + sequence number). */
   sourceInfo?: SourceInfo
   /** Channel handler (FIFO or Ring) backing reply delivery. Defaults to FIFO. */
+  handler?: ChannelHandler
+}
+
+/** Options for [`Liveliness::get`]. */
+export interface LivelinessGetOptions {
+  /**
+   * How long to wait for replies, in milliseconds. Defaults to the session's
+   * configured query timeout.
+   */
+  timeout?: number
+  /** Channel handler (FIFO or Ring) backing reply delivery. Defaults to FIFO. */
+  handler?: ChannelHandler
+}
+
+/** Options for [`Liveliness::declareSubscriber`]. */
+export interface LivelinessSubscriberOptions {
+  /**
+   * When `true`, Zenoh queries the network for the currently live tokens upon
+   * declaring the subscriber, delivering each as a `Put` sample. When `false`
+   * (the default) it does not — though currently live tokens may still arrive.
+   */
+  history?: boolean
+  /** Channel handler (FIFO or Ring) backing delivery. Defaults to FIFO. */
   handler?: ChannelHandler
 }
 
@@ -750,6 +875,23 @@ export type SampleKind = /** Issued by a `put`. */
 'Delete';
 
 /**
+ * Scout for Zenoh nodes in the network.
+ *
+ * Spawns a task that periodically sends scout messages and delivers the
+ * [`Hello`] replies through the returned [`Scout`] handle's channel. Stop it
+ * with `Scout.stop()`.
+ *
+ * # Arguments
+ *
+ * * `what` - The kinds of node to scout for, as [`WhatAmI`] values that are
+ *   folded together. An empty array matches all kinds.
+ * * `config` - The [`Config`] to use for scouting.
+ * * `handler` - Optional channel handler (FIFO or Ring) backing delivery.
+ *   Defaults to FIFO.
+ */
+export declare function scout(what: Array<WhatAmI>, config: Config, handler?: ChannelHandler | undefined | null): Promise<Scout>
+
+/**
  * Source metadata for a publication: which entity produced the sample and the
  * source's own sequence number for it. Used by advanced pub/sub (e.g. for
  * missing-sample detection); the base primitives just transmit it.
@@ -780,3 +922,19 @@ export interface Timestamp {
   /** The id of the source clock, as a hex string (a Zenoh ID). */
   id: string
 }
+
+/**
+ * The kind of node a Zenoh process runs as (mirrors `zenoh::config::WhatAmI`).
+ *
+ * Used both to describe a discovered node (in a [`Hello`]) and to select which
+ * kinds to scout for (in [`scout`]).
+ */
+export type WhatAmI = /**
+ * A router: maintains a statically-configured network topology and forwards
+ * between nodes.
+ */
+'Router'|
+/** A peer: discovers and connects to other nodes directly (the default mode). */
+'Peer'|
+/** A client: stays connected to a single gateway node. */
+'Client';
