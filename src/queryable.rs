@@ -178,10 +178,10 @@ impl Query {
     options: Option<ReplyErrOptions>,
   ) -> Result<()> {
     let mut builder = self.inner.reply_err(to_zbytes(payload));
-    if let Some(options) = options {
-      if let Some(encoding) = options.encoding {
-        builder = builder.encoding(encoding);
-      }
+    if let Some(options) = options
+      && let Some(encoding) = options.encoding
+    {
+      builder = builder.encoding(encoding);
     }
     builder.await.map_err(to_napi_err)
   }

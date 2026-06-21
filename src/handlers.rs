@@ -71,11 +71,15 @@ impl<T: Send + 'static> ChannelReceiver<T> {
   }
 }
 
+/// The `(callback, handler)` pair to hand to a builder's `.with(..)`, paired
+/// with the [`ChannelReceiver`] to keep for consuming items.
+type ChannelParts<T, H> = ((Callback<T>, Arc<H>), ChannelReceiver<T>);
+
 /// Build a FIFO channel: the `(callback, handler)` pair to hand to a builder's
 /// `.with(..)`, plus the receiver to keep for consuming items.
 pub(crate) fn fifo_parts<T: Send + 'static>(
   capacity: Option<u32>,
-) -> ((Callback<T>, Arc<FifoChannelHandler<T>>), ChannelReceiver<T>) {
+) -> ChannelParts<T, FifoChannelHandler<T>> {
   let channel = match capacity {
     Some(capacity) => FifoChannel::new(capacity as usize),
     None => FifoChannel::default(),
@@ -91,7 +95,7 @@ pub(crate) fn fifo_parts<T: Send + 'static>(
 /// Build a ring channel, mirroring [`fifo_parts`].
 pub(crate) fn ring_parts<T: Send + 'static>(
   capacity: Option<u32>,
-) -> ((Callback<T>, Arc<RingChannelHandler<T>>), ChannelReceiver<T>) {
+) -> ChannelParts<T, RingChannelHandler<T>> {
   let channel = match capacity {
     Some(capacity) => RingChannel::new(capacity as usize),
     None => RingChannel::default(),

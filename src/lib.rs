@@ -1,5 +1,3 @@
-#![deny(clippy::all)]
-
 //! Node.js native bindings for Zenoh, built with NAPI-RS.
 //!
 //! The surface mirrors `zenoh`'s public API 1:1; only runtime mechanics
