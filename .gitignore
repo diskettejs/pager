@@ -117,6 +117,7 @@ dist
 
 /target
 Cargo.lock
+target
 
 *.node
 .pnp.*

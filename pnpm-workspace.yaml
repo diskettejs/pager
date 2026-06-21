@@ -1,2 +1,6 @@
+packages:
+  - examples/*
+  - packages/*
+
 minimumReleaseAgeExclude:
   - '@napi-rs/*'
