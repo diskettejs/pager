@@ -3,6 +3,7 @@
 //! The surface mirrors `zenoh`'s public API 1:1; only runtime mechanics
 //! (async resolution, ownership, JS value marshaling) are adapted.
 
+mod advanced;
 mod bytes;
 mod config;
 mod error;
@@ -11,6 +12,7 @@ mod keyexpr;
 mod liveliness;
 mod macros;
 mod matching;
+mod miss;
 mod publisher;
 mod qos;
 mod querier;

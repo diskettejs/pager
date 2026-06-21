@@ -162,6 +162,9 @@ export declare class MatchingListener {
 /**
  * A publisher bound to a key expression, with QoS fixed at declaration time.
  * Create one with [`Session::declarePublisher`].
+ *
+ * Every publisher is an advanced publisher (see [`PublisherOptions`]); the
+ * publisher owns sequencing, so `put`/`delete` no longer take a `sourceInfo`.
  */
 export declare class Publisher {
   /** Publish a `Put` sample to this publisher's key expression. */
@@ -404,6 +407,39 @@ export declare class Sample {
 }
 
 /**
+ * Notifies of samples a subscriber detected as missed, delivered through a
+ * channel. Obtain one from [`Subscriber::sampleMissListener`].
+ *
+ * Consume it with `for await (const miss of listener)`, or pull with
+ * `recv()` / `tryRecv()`. The listener is tied to its subscriber: if the
+ * subscriber is undeclared or dropped, iteration ends.
+ *
+ * This type implements JavaScript's async iterable protocol.
+ * It can be used with `for await...of` loops.
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_async_iterator_and_async_iterable_protocols
+ */
+export declare class SampleMissListener {
+  /**
+   * Wait for the next miss notification, resolving to `null` once the listener
+   * is closed.
+   */
+  recv(): Promise<Miss | null>
+  /**
+   * Return a buffered miss notification if one is immediately available, or
+   * `null` if the channel is currently empty. Throws once the listener has
+   * disconnected, letting a polling loop tell "nothing yet" apart from "closed".
+   */
+  tryRecv(): Miss | null
+  /**
+   * Undeclare the listener; any buffered notifications are dropped with the
+   * handler. Resolves synchronously.
+   */
+  undeclare(): void
+  [Symbol.asyncIterator](): AsyncGenerator<Miss, void, undefined>
+}
+
+/**
  * A scout that delivers [`Hello`] messages through a channel.
  *
  * Consume it with `for await (const hello of scout)`, or pull messages
@@ -463,11 +499,15 @@ export declare class Session {
   /**
    * Declare a [`Publisher`] for `key_expr`. Its QoS is fixed at declaration
    * time; per-publication `put`/`delete` can override only payload fields.
+   *
+   * Every publisher is an advanced publisher (see [`PublisherOptions`]).
    */
   declarePublisher(keyExpr: string | KeyExpr, options?: PublisherOptions | undefined | null): Promise<Publisher>
   /**
    * Declare a [`Subscriber`] for `key_expr`. Samples are delivered through a
    * FIFO channel, consumable as an async iterator or via `recv`/`tryRecv`.
+   *
+   * Every subscriber is an advanced subscriber (see [`SubscriberOptions`]).
    */
   declareSubscriber(keyExpr: string | KeyExpr, options?: SubscriberOptions | undefined | null): Promise<Subscriber>
   /**
@@ -537,11 +577,40 @@ export declare class Subscriber {
    * any buffered samples are dropped with the handler. Resolves synchronously.
    */
   undeclare(): void
+  /**
+   * Declare a [`SampleMissListener`] for samples this subscriber detected as
+   * missed. The optional channel `handler` (FIFO or Ring) backs the
+   * notifications; defaults to FIFO.
+   *
+   * Misses are only detectable from publishers that enable
+   * `sampleMissDetection`. Not available on liveliness subscribers.
+   */
+  sampleMissListener(handler?: ChannelHandler | undefined | null): Promise<SampleMissListener>
+  /**
+   * Declare a [`Subscriber`] that detects matching advanced publishers through
+   * liveliness: each sample is a `Put` when a publisher appears and a `Delete`
+   * when it vanishes. The optional channel `handler` defaults to FIFO.
+   *
+   * Only publishers that enable `publisherDetection` can be detected. Not
+   * available on liveliness subscribers.
+   */
+  detectPublishers(handler?: ChannelHandler | undefined | null): Promise<Subscriber>
   /** The key expression this subscriber is subscribed to. */
   get keyExpr(): KeyExpr
   /** This subscriber's globally-unique entity id. */
   get id(): EntityGlobalId
   [Symbol.asyncIterator](): AsyncGenerator<Sample, void, undefined>
+}
+
+/**
+ * Attaches a cache to a publisher so matching subscribers can recover history
+ * and/or missed samples from it.
+ */
+export interface CacheConfig {
+  /** How many samples to keep per resource (default: 1). */
+  maxSamples?: number
+  /** QoS for replies served from the cache. */
+  repliesConfig?: RepliesConfig
 }
 
 /** Channel handler configuration for a subscriber or listener. */
@@ -643,6 +712,34 @@ export interface GetOptions {
   handler?: ChannelHandler
 }
 
+/**
+ * Periodic heartbeat that advertises the last sample's sequence number, letting
+ * subscribers detect and recover a lost *last* sample.
+ */
+export interface HeartbeatConfig {
+  /** Heartbeat period, in milliseconds. */
+  periodMs: number
+  /**
+   * When `true`, the sequence number is advertised only when it changed since
+   * the previous period (`sporadicHeartbeat`); otherwise every period
+   * (`heartbeat`).
+   */
+  sporadic?: boolean
+}
+
+/**
+ * Enables a subscriber to query for historical samples on startup. History can
+ * only be served by publishers that enable `cache`.
+ */
+export interface HistoryConfig {
+  /** Detect late-joining publishers (via liveliness) and query their history. */
+  detectLatePublishers?: boolean
+  /** Query at most this many samples per resource. */
+  maxSamples?: number
+  /** Query only samples no older than this many seconds. */
+  maxAgeSecs?: number
+}
+
 /** Options for [`Liveliness::get`]. */
 export interface LivelinessGetOptions {
   /**
@@ -686,6 +783,29 @@ export interface MatchingStatus {
   matching: boolean
 }
 
+/**
+ * A report that a subscriber detected missed samples from a source.
+ *
+ * Misses are only detected from publishers that enable `sampleMissDetection`.
+ */
+export interface Miss {
+  /** The source (publisher entity) the missed samples were from. */
+  source: EntityGlobalId
+  /** How many consecutive samples were missed. */
+  nb: number
+}
+
+/**
+ * Enables sample-miss detection on a publisher: each sample is tagged with a
+ * per-publisher sequence number, which is what lets subscribers detect misses
+ * (`sampleMissListener`) and recover them (`recovery`). The optional
+ * `heartbeat` additionally allows the last sample to be recovered.
+ */
+export interface MissDetectionConfig {
+  /** Periodically advertise the last sample's sequence number. */
+  heartbeat?: HeartbeatConfig
+}
+
 /** Priority of a publication. Listed highest to lowest; `Data` is the default. */
 export type Priority =  'RealTime'|
 'InteractiveHigh'|
@@ -699,16 +819,21 @@ export type Priority =  'RealTime'|
 export interface PublisherDeleteOptions {
   /** Optional attachment carried alongside the deletion. */
   attachment?: string | Uint8Array
-  /** Timestamp to attach; obtain one from [`Session::newTimestamp`]. */
+  /**
+   * Timestamp to attach; obtain one from [`Session::newTimestamp`]. Overrides
+   * the timestamp the publisher attaches automatically.
+   */
   timestamp?: Timestamp
-  /** Source metadata (producing entity + sequence number). */
-  sourceInfo?: SourceInfo
 }
 
 /**
  * Options for [`Session::declarePublisher`]. These settings are fixed for the
  * publisher's lifetime; per-publication `put`/`delete` may only override
  * payload-level fields (encoding, attachment, …), not QoS.
+ *
+ * Every publisher is an advanced publisher: `cache`, `sampleMissDetection`, and
+ * `publisherDetection` configure the advanced capabilities that matching
+ * subscribers rely on for history, recovery, and detection.
  */
 export interface PublisherOptions {
   /** Default encoding for publications. */
@@ -723,6 +848,26 @@ export interface PublisherOptions {
   reliability?: Reliability
   /** Restrict which matching subscribers receive the data (default: `Any`). */
   allowedDestination?: Locality
+  /**
+   * Cache recent samples so matching subscribers can recover history and/or
+   * missed samples from this publisher.
+   */
+  cache?: CacheConfig
+  /**
+   * Tag samples with sequence numbers so matching subscribers can detect (and,
+   * with `cache`, recover) lost samples.
+   */
+  sampleMissDetection?: MissDetectionConfig
+  /**
+   * Advertise this publisher (via liveliness) so subscribers can detect it and
+   * request its history.
+   */
+  publisherDetection?: boolean
+  /**
+   * Key expression appended to the publisher-detection liveliness token and the
+   * cache queryable, used to convey metadata.
+   */
+  publisherDetectionMetadata?: string
 }
 
 /** Options for [`Publisher::put`]. */
@@ -731,10 +876,11 @@ export interface PublisherPutOptions {
   encoding?: string
   /** Optional attachment carried alongside the payload. */
   attachment?: string | Uint8Array
-  /** Timestamp to attach; obtain one from [`Session::newTimestamp`]. */
+  /**
+   * Timestamp to attach; obtain one from [`Session::newTimestamp`]. Overrides
+   * the timestamp the publisher attaches automatically.
+   */
   timestamp?: Timestamp
-  /** Source metadata (producing entity + sequence number). */
-  sourceInfo?: SourceInfo
 }
 
 /** Options for [`Session::put`]. */
@@ -820,6 +966,21 @@ export type QueryTarget = /** Route to the best-matching queryable Zenoh can fin
 'AllComplete';
 
 /**
+ * Configures recovery of detected lost samples. Exactly one mode must be set:
+ * `heartbeat` (recover from publisher heartbeats) or `periodicQueriesMs`
+ * (recover by polling). They are mutually exclusive — `zenoh-ext` enforces this
+ * at the type level, which cannot be expressed in TypeScript, so it is checked
+ * at declaration time instead. Recovery can only be achieved by publishers that
+ * enable both `cache` and `sampleMissDetection`.
+ */
+export interface RecoveryConfig {
+  /** Recover by subscribing to publisher heartbeats. */
+  heartbeat?: boolean
+  /** Recover by querying for missed samples every this many milliseconds. */
+  periodicQueriesMs?: number
+}
+
+/**
  * Reliability of message delivery.
  *
  * **NOTE**: as in Zenoh itself, reliability does not currently trigger wire
@@ -829,6 +990,19 @@ export type Reliability = /** Messages may be lost. */
 'BestEffort'|
 /** Messages are guaranteed to be delivered (the default). */
 'Reliable';
+
+/**
+ * QoS applied to the samples a publisher's cache sends back when a subscriber
+ * queries history or recovers missed samples.
+ */
+export interface RepliesConfig {
+  /** Priority of reply samples (default: `Data`). */
+  priority?: Priority
+  /** Congestion control for reply samples (default: `Block`). */
+  congestionControl?: CongestionControl
+  /** When `true`, reply samples are sent unbatched. */
+  express?: boolean
+}
 
 /** Options for [`Query::replyDel`]. */
 export interface ReplyDelOptions {
@@ -903,12 +1077,37 @@ export interface SourceInfo {
   sourceSn: number
 }
 
-/** Options for [`Session::declareSubscriber`]. */
+/**
+ * Options for [`Session::declareSubscriber`].
+ *
+ * Every subscriber is an advanced subscriber: `history`, `recovery`, and
+ * `subscriberDetection` configure the advanced capabilities that work with
+ * matching advanced publishers.
+ */
 export interface SubscriberOptions {
   /** Restrict which publishers' samples are accepted (default: `Any`). */
   allowedOrigin?: Locality
   /** Channel handler (FIFO or Ring) backing delivery. Defaults to FIFO. */
   handler?: ChannelHandler
+  /** Query for historical data on startup (served by publishers that `cache`). */
+  history?: HistoryConfig
+  /**
+   * Ask for retransmission of detected lost samples (served by publishers that
+   * enable both `cache` and `sampleMissDetection`).
+   */
+  recovery?: RecoveryConfig
+  /** Advertise this subscriber through liveliness so it can be detected. */
+  subscriberDetection?: boolean
+  /**
+   * Key expression appended to the subscriber-detection liveliness token, used
+   * to convey metadata.
+   */
+  subscriberDetectionMetadata?: string
+  /**
+   * Timeout for the queries this subscriber issues (history, recovery), in
+   * milliseconds.
+   */
+  queryTimeoutMs?: number
 }
 
 /**

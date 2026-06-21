@@ -3,6 +3,7 @@ use std::str::FromStr;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use zenoh::session::ZenohId;
+use zenoh_ext::{AdvancedPublisherBuilderExt, AdvancedSubscriberBuilderExt};
 
 use crate::bytes::to_zbytes;
 use crate::config::Config;
@@ -192,41 +193,86 @@ impl Session {
 
   /// Declare a [`Publisher`] for `key_expr`. Its QoS is fixed at declaration
   /// time; per-publication `put`/`delete` can override only payload fields.
+  ///
+  /// Every publisher is an advanced publisher (see [`PublisherOptions`]).
   #[napi]
   pub async fn declare_publisher(
     &self,
     #[napi(ts_arg_type = "string | KeyExpr")] key_expr: KeyExprArg,
     options: Option<PublisherOptions>,
   ) -> Result<Publisher> {
-    let mut builder = self.inner.declare_publisher(key_expr.0);
-    if let Some(options) = options {
-      apply_options!(builder, options, {
-        encoding,
-        congestion_control => into,
-        priority => into,
-        express,
-        reliability => into,
-        allowed_destination => into,
-      });
+    let base = self.inner.declare_publisher(key_expr.0);
+    match options {
+      Some(mut options) => {
+        // Stash reliability via the zenoh `Copy` type: `AdvancedPublisher` has no
+        // reliability getter, so set it on the builder and keep it for the getter.
+        let reliability: zenoh::qos::Reliability = options
+          .reliability
+          .take()
+          .unwrap_or(Reliability::Reliable)
+          .into();
+        let mut base = base.reliability(reliability);
+        apply_options!(base, options, {
+          encoding,
+          congestion_control => into,
+          priority => into,
+          express,
+          allowed_destination => into,
+        });
+        let mut builder = base.advanced();
+        if let Some(cache) = options.cache {
+          builder = builder.cache(cache.into_zenoh());
+        }
+        if let Some(miss) = options.sample_miss_detection {
+          builder = builder.sample_miss_detection(miss.into_zenoh());
+        }
+        if options.publisher_detection == Some(true) {
+          builder = builder.publisher_detection();
+        }
+        if let Some(meta) = options.publisher_detection_metadata {
+          builder = builder.publisher_detection_metadata(meta);
+        }
+        let publisher = builder.await.map_err(to_napi_err)?;
+        Ok(Publisher::new(publisher, reliability))
+      }
+      None => {
+        let publisher = base.advanced().await.map_err(to_napi_err)?;
+        Ok(Publisher::new(publisher, zenoh::qos::Reliability::Reliable))
+      }
     }
-    let publisher = builder.await.map_err(to_napi_err)?;
-    Ok(Publisher::new(publisher))
   }
 
   /// Declare a [`Subscriber`] for `key_expr`. Samples are delivered through a
   /// FIFO channel, consumable as an async iterator or via `recv`/`tryRecv`.
+  ///
+  /// Every subscriber is an advanced subscriber (see [`SubscriberOptions`]).
   #[napi]
   pub async fn declare_subscriber(
     &self,
     #[napi(ts_arg_type = "string | KeyExpr")] key_expr: KeyExprArg,
     options: Option<SubscriberOptions>,
   ) -> Result<Subscriber> {
-    let mut builder = self.inner.declare_subscriber(key_expr.0);
+    let mut builder = self.inner.declare_subscriber(key_expr.0).advanced();
     let mut channel = None;
     if let Some(options) = options {
-      apply_options!(builder, options, {
-        allowed_origin => into,
-      });
+      if let Some(origin) = options.allowed_origin {
+        builder = builder.allowed_origin(origin.into());
+      }
+      if let Some(history) = options.history {
+        builder = builder.history(history.into_zenoh());
+      }
+      if let Some(recovery) = options.recovery {
+        builder = builder.recovery(recovery.into_zenoh()?);
+      }
+      if options.subscriber_detection == Some(true) {
+        builder = builder.subscriber_detection();
+      }
+      if let Some(meta) = options.subscriber_detection_metadata {
+        builder = builder.subscriber_detection_metadata(meta);
+      }
+      if let Some(timeout) = options.query_timeout_ms {
+        builder = builder.query_timeout(std::time::Duration::from_millis(timeout.into()));
+      }
       channel = options.handler;
     }
     Subscriber::declare(builder, channel).await

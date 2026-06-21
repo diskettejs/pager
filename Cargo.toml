@@ -11,6 +11,7 @@ napi = { version = "3", default-features = false, features = ["napi10", "async"]
 napi-derive = "3"
 
 zenoh = { version = "1.9.0", features = ["unstable", "internal"] }
+zenoh-ext = { version = "1.9.0", features = ["unstable"] }
 
 [build-dependencies]
 napi-build = "2"
