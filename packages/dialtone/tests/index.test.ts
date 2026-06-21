@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { Config, KeyExpr, scout, Session, Subscriber } from '../main.js'
+import { Config, KeyExpr, scout, Session, Subscriber } from '../index.js'
 
 test('Config factory methods construct instances', () => {
   expect(Config.default()).toBeInstanceOf(Config)

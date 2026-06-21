@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { Session } from '../main.js'
+import { Session } from '../index.js'
 
 // Advanced pub/sub is integrated into the regular Publisher/Subscriber surface:
 // every declared publisher/subscriber is an advanced one, so these options live
