@@ -9,6 +9,9 @@ use crate::config::Config;
 use crate::error::to_napi_err;
 use crate::publisher::{Publisher, PublisherOptions};
 use crate::qos::{CongestionControl, Priority, Reliability};
+use crate::querier::{Querier, QuerierOptions};
+use crate::query::{GetOptions, Replies};
+use crate::queryable::{Queryable, QueryableOptions};
 use crate::sample::{Locality, SourceInfo};
 use crate::subscriber::{Subscriber, SubscriberOptions};
 use crate::time::Timestamp;
@@ -23,6 +26,7 @@ pub struct Session {
 /// Globally-unique identifier of a Zenoh entity (a session, publisher, …): the
 /// owning session's Zenoh ID together with a session-local entity id.
 #[napi(object)]
+#[derive(Clone)]
 pub struct EntityGlobalId {
   /// Zenoh ID of the owning session, as a hex string.
   pub zid: String,
@@ -183,6 +187,54 @@ impl Session {
     builder.await.map_err(to_napi_err)
   }
 
+  /// Query `selector` and receive the matching queryables' replies through a
+  /// channel, consumable as an async iterator or via `recv`/`tryRecv`.
+  #[napi]
+  pub async fn get(&self, selector: String, options: Option<GetOptions>) -> Result<Replies> {
+    let mut builder = self.inner.get(selector);
+    let mut channel = None;
+    if let Some(options) = options {
+      if let Some(payload) = options.payload {
+        builder = builder.payload(to_zbytes(payload));
+      }
+      if let Some(encoding) = options.encoding {
+        builder = builder.encoding(encoding);
+      }
+      if let Some(attachment) = options.attachment {
+        builder = builder.attachment(to_zbytes(attachment));
+      }
+      if let Some(congestion_control) = options.congestion_control {
+        builder = builder.congestion_control(congestion_control.into());
+      }
+      if let Some(priority) = options.priority {
+        builder = builder.priority(priority.into());
+      }
+      if let Some(express) = options.express {
+        builder = builder.express(express);
+      }
+      if let Some(target) = options.target {
+        builder = builder.target(target.into());
+      }
+      if let Some(consolidation) = options.consolidation {
+        builder = builder.consolidation(zenoh::query::ConsolidationMode::from(consolidation));
+      }
+      if let Some(allowed_destination) = options.allowed_destination {
+        builder = builder.allowed_destination(allowed_destination.into());
+      }
+      if let Some(timeout) = options.timeout {
+        builder = builder.timeout(std::time::Duration::from_millis(timeout.into()));
+      }
+      if let Some(accept_replies) = options.accept_replies {
+        builder = builder.accept_replies(accept_replies.into());
+      }
+      if let Some(source_info) = options.source_info {
+        builder = builder.source_info(source_info.to_zenoh()?);
+      }
+      channel = options.handler;
+    }
+    Replies::from_session_get(builder, channel).await
+  }
+
   /// Declare a [`Publisher`] for `key_expr`. Its QoS is fixed at declaration
   /// time; per-publication `put`/`delete` can override only payload fields.
   #[napi]
@@ -233,6 +285,67 @@ impl Session {
       channel = options.handler;
     }
     Subscriber::declare(builder, channel).await
+  }
+
+  /// Declare a [`Queryable`] for `key_expr`. Queries are delivered through a
+  /// channel, consumable as an async iterator or via `recv`/`tryRecv`.
+  #[napi]
+  pub async fn declare_queryable(
+    &self,
+    key_expr: String,
+    options: Option<QueryableOptions>,
+  ) -> Result<Queryable> {
+    let mut builder = self.inner.declare_queryable(key_expr);
+    let mut channel = None;
+    if let Some(options) = options {
+      if let Some(complete) = options.complete {
+        builder = builder.complete(complete);
+      }
+      if let Some(allowed_origin) = options.allowed_origin {
+        builder = builder.allowed_origin(allowed_origin.into());
+      }
+      channel = options.handler;
+    }
+    Queryable::declare(builder, channel).await
+  }
+
+  /// Declare a [`Querier`] for `key_expr` — a reusable handle for querying that
+  /// key, with query settings fixed here at declaration time.
+  #[napi]
+  pub async fn declare_querier(
+    &self,
+    key_expr: String,
+    options: Option<QuerierOptions>,
+  ) -> Result<Querier> {
+    let mut builder = self.inner.declare_querier(key_expr);
+    if let Some(options) = options {
+      if let Some(congestion_control) = options.congestion_control {
+        builder = builder.congestion_control(congestion_control.into());
+      }
+      if let Some(priority) = options.priority {
+        builder = builder.priority(priority.into());
+      }
+      if let Some(express) = options.express {
+        builder = builder.express(express);
+      }
+      if let Some(target) = options.target {
+        builder = builder.target(target.into());
+      }
+      if let Some(consolidation) = options.consolidation {
+        builder = builder.consolidation(zenoh::query::ConsolidationMode::from(consolidation));
+      }
+      if let Some(allowed_destination) = options.allowed_destination {
+        builder = builder.allowed_destination(allowed_destination.into());
+      }
+      if let Some(timeout) = options.timeout {
+        builder = builder.timeout(std::time::Duration::from_millis(timeout.into()));
+      }
+      if let Some(accept_replies) = options.accept_replies {
+        builder = builder.accept_replies(accept_replies.into());
+      }
+    }
+    let querier = builder.await.map_err(to_napi_err)?;
+    Ok(Querier::new(querier))
   }
 
   /// Create a new timestamp using this session's hybrid logical clock.

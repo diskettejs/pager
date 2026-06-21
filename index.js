@@ -590,17 +590,26 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { Config, MatchingListener, Publisher, Sample, Session, SessionInfo, Subscriber, ChannelType, CongestionControl, Locality, Priority, Reliability, SampleKind } = nativeBinding
+const { Config, MatchingListener, Publisher, Querier, Query, Queryable, Replies, ReplyError, ReplySample, Sample, Session, SessionInfo, Subscriber, ChannelType, CongestionControl, ConsolidationMode, Locality, Priority, QueryTarget, Reliability, ReplyKeyExpr, SampleKind } = nativeBinding
 export { Config }
 export { MatchingListener }
 export { Publisher }
+export { Querier }
+export { Query }
+export { Queryable }
+export { Replies }
+export { ReplyError }
+export { ReplySample }
 export { Sample }
 export { Session }
 export { SessionInfo }
 export { Subscriber }
 export { ChannelType }
 export { CongestionControl }
+export { ConsolidationMode }
 export { Locality }
 export { Priority }
+export { QueryTarget }
 export { Reliability }
+export { ReplyKeyExpr }
 export { SampleKind }

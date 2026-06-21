@@ -91,6 +91,181 @@ export declare class Publisher {
 }
 
 /**
+ * A querier bound to a key expression, with query settings fixed at
+ * declaration time — the query analog of a [`Publisher`]. Create one with
+ * [`Session::declareQuerier`], then issue queries with `get`.
+ */
+export declare class Querier {
+  /**
+   * Issue a query on this querier's key expression and receive the matching
+   * queryables' replies through a channel, consumable as an async iterator or
+   * via `recv`/`tryRecv`.
+   */
+  get(options?: QuerierGetOptions | undefined | null): Promise<Replies>
+  /** Whether any queryables currently match this querier's key expression. */
+  matchingStatus(): Promise<MatchingStatus>
+  /**
+   * Declare a [`MatchingListener`] that notifies when this querier's set of
+   * matching queryables changes. The optional channel `handler` (FIFO or Ring)
+   * backs the notifications; defaults to FIFO.
+   */
+  matchingListener(handler?: ChannelHandler | undefined | null): Promise<MatchingListener>
+  /**
+   * Undeclare this querier. Subsequent operations on it will error.
+   *
+   * Resolves synchronously, so awaiting the returned value is optional.
+   */
+  undeclare(): void
+  /** The key expression this querier sends queries on. */
+  get keyExpr(): string
+  /** The congestion control strategy applied to queries. */
+  get congestionControl(): CongestionControl
+  /** The priority of queries. */
+  get priority(): Priority
+  /** Which reply key expressions this querier accepts. */
+  get acceptReplies(): ReplyKeyExpr
+  /** This querier's globally-unique entity id. */
+  get id(): EntityGlobalId
+}
+
+/**
+ * A query received by a [`Queryable`], to be answered with `reply` / `replyErr`
+ * / `replyDel` (any number of times, including none).
+ *
+ * The query is finalized when this object is dropped, so keep it alive until
+ * you have sent every reply you intend to.
+ */
+export declare class Query {
+  /** The full selector (key expression plus parameters) this query targets. */
+  get selector(): string
+  /** The key expression this query targets. */
+  get keyExpr(): string
+  /** The selector parameters (the part after `?`), as a raw string. */
+  get parameters(): string
+  /** The query's payload bytes, if it carried any. */
+  get payload(): Buffer | null
+  /** The payload encoding, if the query carried a payload. */
+  get encoding(): string | null
+  /** The query's attachment bytes, if any. */
+  get attachment(): Buffer | null
+  /** The query's source metadata, if any. */
+  get sourceInfo(): SourceInfo | null
+  /** Which reply key expressions this query accepts. */
+  get acceptsReplies(): ReplyKeyExpr
+  /** The priority the query was sent with. */
+  get priority(): Priority
+  /** The congestion control the query was sent with. */
+  get congestionControl(): CongestionControl
+  /** Whether the query was sent express (unbatched). */
+  get express(): boolean
+  /** Reply to this query with a `Put` sample for `key_expr`. */
+  reply(keyExpr: string, payload: string | Uint8Array, options?: ReplyOptions | undefined | null): Promise<void>
+  /** Reply to this query with an error response. */
+  replyErr(payload: string | Uint8Array, options?: ReplyErrOptions | undefined | null): Promise<void>
+  /** Reply to this query with a `Delete` sample for `key_expr`. */
+  replyDel(keyExpr: string, options?: ReplyDelOptions | undefined | null): Promise<void>
+}
+
+/**
+ * A queryable that delivers [`Query`]s through a channel.
+ *
+ * Consume it with `for await (const query of queryable)`, or pull queries
+ * individually with `recv()` / `tryRecv()`. Iteration ends (yields `null`)
+ * once the queryable is undeclared — its buffered queries are dropped with the
+ * handler, as in zenoh — or once the session/link closes and any buffered
+ * queries have been drained.
+ *
+ * This type implements JavaScript's async iterable protocol.
+ * It can be used with `for await...of` loops.
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_async_iterator_and_async_iterable_protocols
+ */
+export declare class Queryable {
+  /**
+   * Wait for the next query, resolving to `null` once the queryable is
+   * undeclared, or once it closes and all buffered queries have been drained.
+   */
+  recv(): Promise<Query | null>
+  /**
+   * Return a buffered query if one is immediately available, or `null` if the
+   * channel is currently empty. Throws once the queryable has disconnected
+   * (undeclared, or the session closed and all buffered queries drained),
+   * letting a polling loop tell "nothing yet" apart from "closed".
+   */
+  tryRecv(): Query | null
+  /**
+   * Undeclare the queryable. Iteration / `recv` then end and `tryRecv` throws;
+   * any buffered queries are dropped with the handler. Resolves synchronously.
+   */
+  undeclare(): void
+  /** The key expression this queryable answers. */
+  get keyExpr(): string
+  /** This queryable's globally-unique entity id. */
+  get id(): EntityGlobalId
+  [Symbol.asyncIterator](): AsyncGenerator<Query, void, undefined>
+}
+
+/**
+ * The replies to a [`Session::get`], delivered through a channel.
+ *
+ * Consume it with `for await (const reply of replies)`, or pull replies with
+ * `recv()` / `tryRecv()`. Each reply is a [`ReplySample`] or a [`ReplyError`] —
+ * discriminate with `if (reply.sample)`. Iteration ends (yields `null`) once
+ * every queryable has answered or the query times out. A query is not a
+ * declared entity, so there is nothing to undeclare.
+ *
+ * This type implements JavaScript's async iterable protocol.
+ * It can be used with `for await...of` loops.
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_async_iterator_and_async_iterable_protocols
+ */
+export declare class Replies {
+  /**
+   * Wait for the next reply, resolving to `null` once the query is complete
+   * and all buffered replies have been drained.
+   */
+  recv(): Promise<ReplySample | ReplyError | null>
+  /**
+   * Return a buffered reply if one is immediately available, or `null` if none
+   * is ready yet. Throws once the query is complete and all replies drained,
+   * letting a polling loop tell "nothing yet" apart from "done".
+   */
+  tryRecv(): ReplySample | ReplyError | null
+  [Symbol.asyncIterator](): AsyncGenerator<ReplySample | ReplyError, void, undefined>
+}
+
+/**
+ * A query reply carrying an error response instead of a sample — mirrors
+ * zenoh's `ReplyError` (its `payload` / `encoding`).
+ *
+ * The other arm of the reply union returned by `get`: `sample` is `null`, so
+ * `if (reply.sample)` discriminates it from [`ReplySample`].
+ */
+export declare class ReplyError {
+  /** Always `null` on an error reply — the discriminant against [`ReplySample`]. */
+  get sample(): null
+  /** The error payload bytes. */
+  get payload(): Buffer
+  /** The error payload encoding. */
+  get encoding(): string
+  /** The id of the entity that produced this reply, if known. */
+  get replierId(): EntityGlobalId | null
+}
+
+/**
+ * A query reply carrying a [`Sample`] — the value a queryable returned.
+ *
+ * One arm of the reply union returned by `get`: `sample` is the queried value.
+ * Pairs with [`ReplyError`]; discriminate with `if (reply.sample)`.
+ */
+export declare class ReplySample {
+  /** The sample this reply carries. */
+  get sample(): Sample
+  /** The id of the entity that produced this reply, if known. */
+  get replierId(): EntityGlobalId | null
+}
+
+/**
  * A data sample received by a subscriber (or a query reply): the payload plus
  * all of its metadata.
  *
@@ -145,6 +320,11 @@ export declare class Session {
    */
   delete(keyExpr: string, options?: DeleteOptions | undefined | null): Promise<void>
   /**
+   * Query `selector` and receive the matching queryables' replies through a
+   * channel, consumable as an async iterator or via `recv`/`tryRecv`.
+   */
+  get(selector: string, options?: GetOptions | undefined | null): Promise<Replies>
+  /**
    * Declare a [`Publisher`] for `key_expr`. Its QoS is fixed at declaration
    * time; per-publication `put`/`delete` can override only payload fields.
    */
@@ -154,6 +334,16 @@ export declare class Session {
    * FIFO channel, consumable as an async iterator or via `recv`/`tryRecv`.
    */
   declareSubscriber(keyExpr: string, options?: SubscriberOptions | undefined | null): Promise<Subscriber>
+  /**
+   * Declare a [`Queryable`] for `key_expr`. Queries are delivered through a
+   * channel, consumable as an async iterator or via `recv`/`tryRecv`.
+   */
+  declareQueryable(keyExpr: string, options?: QueryableOptions | undefined | null): Promise<Queryable>
+  /**
+   * Declare a [`Querier`] for `key_expr` — a reusable handle for querying that
+   * key, with query settings fixed here at declaration time.
+   */
+  declareQuerier(keyExpr: string, options?: QuerierOptions | undefined | null): Promise<Querier>
   /** Create a new timestamp using this session's hybrid logical clock. */
   newTimestamp(): Timestamp
   /** Access information about this session and the nodes it is connected to. */
@@ -238,6 +428,19 @@ export type CongestionControl = /** Drop the message (the default for `put`/`del
  */
 'BlockFirst';
 
+/** How replies to a query are consolidated before being delivered. */
+export type ConsolidationMode = /** Consolidate automatically| based on the query (default). */
+'Auto'|
+/** No consolidation: duplicate samples for the same key may be delivered. */
+'None'|
+/**
+ * Forward samples immediately| dropping any with an older-or-equal timestamp
+ * already seen for the same key.
+ */
+'Monotonic'|
+/** Hold replies back and deliver only the latest-timestamped sample per key. */
+'Latest';
+
 /** Options for [`Session::delete`]. */
 export interface DeleteOptions {
   /** Optional attachment carried alongside the deletion. */
@@ -267,6 +470,36 @@ export interface EntityGlobalId {
   zid: string
   /** Session-local entity id. */
   eid: number
+}
+
+/** Options for [`Session::get`]. */
+export interface GetOptions {
+  /** Payload to send alongside the query. */
+  payload?: string | Uint8Array
+  /** Encoding of the query payload. */
+  encoding?: string
+  /** Optional attachment carried alongside the query. */
+  attachment?: string | Uint8Array
+  /** Congestion control strategy for the query (default: `Block`). */
+  congestionControl?: CongestionControl
+  /** Priority of the query (default: `Data`). */
+  priority?: Priority
+  /** When `true`, the query is sent unbatched, trading throughput for latency. */
+  express?: boolean
+  /** Which queryables should answer (default: `BestMatching`). */
+  target?: QueryTarget
+  /** How replies are consolidated before delivery (default: `Auto`). */
+  consolidation?: ConsolidationMode
+  /** Restrict which queryables receive the query (default: `Any`). */
+  allowedDestination?: Locality
+  /** How long to wait for replies, in milliseconds. */
+  timeout?: number
+  /** Which reply key expressions to accept (default: `MatchingQuery`). */
+  acceptReplies?: ReplyKeyExpr
+  /** Source metadata (producing entity + sequence number). */
+  sourceInfo?: SourceInfo
+  /** Channel handler (FIFO or Ring) backing reply delivery. Defaults to FIFO. */
+  handler?: ChannelHandler
 }
 
 /**
@@ -362,6 +595,66 @@ export interface PutOptions {
   sourceInfo?: SourceInfo
 }
 
+/** Options for [`Querier::get`]. */
+export interface QuerierGetOptions {
+  /** Selector parameters (the part after `?`) for this query. */
+  parameters?: string
+  /** Payload to send alongside the query. */
+  payload?: string | Uint8Array
+  /** Encoding of the query payload. */
+  encoding?: string
+  /** Optional attachment carried alongside the query. */
+  attachment?: string | Uint8Array
+  /** Source metadata (producing entity + sequence number). */
+  sourceInfo?: SourceInfo
+  /** Channel handler (FIFO or Ring) backing reply delivery. Defaults to FIFO. */
+  handler?: ChannelHandler
+}
+
+/**
+ * Options for [`Session::declareQuerier`]. These settings are fixed for the
+ * querier's lifetime; per-`get` only the payload and parameters may vary.
+ */
+export interface QuerierOptions {
+  /** Congestion control strategy for queries (default: `Block`). */
+  congestionControl?: CongestionControl
+  /** Priority of queries (default: `Data`). */
+  priority?: Priority
+  /** When `true`, queries are sent unbatched, trading throughput for latency. */
+  express?: boolean
+  /** Which queryables should answer (default: `BestMatching`). */
+  target?: QueryTarget
+  /** How replies are consolidated before delivery (default: `Auto`). */
+  consolidation?: ConsolidationMode
+  /** Restrict which queryables receive queries (default: `Any`). */
+  allowedDestination?: Locality
+  /** How long to wait for replies, in milliseconds. */
+  timeout?: number
+  /** Which reply key expressions to accept (default: `MatchingQuery`). */
+  acceptReplies?: ReplyKeyExpr
+}
+
+/** Options for [`Session::declareQueryable`]. */
+export interface QueryableOptions {
+  /**
+   * Whether this queryable can answer the full queried key expression on its
+   * own; lets queriers using `AllComplete` targeting reach it (default: false).
+   */
+  complete?: boolean
+  /** Restrict which queriers' queries are accepted (default: `Any`). */
+  allowedOrigin?: Locality
+  /** Channel handler (FIFO or Ring) backing delivery. Defaults to FIFO. */
+  handler?: ChannelHandler
+}
+
+/** How a query selects which queryables answer it. */
+export type QueryTarget = /** Route to the best-matching queryable Zenoh can find (default). */
+'BestMatching'|
+/** Deliver to every queryable matching the query's key expression. */
+'All'|
+/** Deliver to every matching queryable declared as `complete`. */
+'AllComplete';
+
 /**
  * Reliability of message delivery.
  *
@@ -372,6 +665,44 @@ export type Reliability = /** Messages may be lost. */
 'BestEffort'|
 /** Messages are guaranteed to be delivered (the default). */
 'Reliable';
+
+/** Options for [`Query::replyDel`]. */
+export interface ReplyDelOptions {
+  /** Optional attachment carried alongside the deletion. */
+  attachment?: string | Uint8Array
+  /** When `true`, the deletion is sent unbatched, trading throughput for latency. */
+  express?: boolean
+  /** Timestamp to attach; obtain one from [`Session::newTimestamp`]. */
+  timestamp?: Timestamp
+  /** Source metadata (producing entity + sequence number). */
+  sourceInfo?: SourceInfo
+}
+
+/** Options for [`Query::replyErr`]. */
+export interface ReplyErrOptions {
+  /** Encoding of the error payload. */
+  encoding?: string
+}
+
+/** Which reply key expressions a query is willing to accept. */
+export type ReplyKeyExpr = /** Accept replies whose key expression need not match the query's. */
+'Any'|
+/** Accept only replies whose key expression matches the query's (default). */
+'MatchingQuery';
+
+/** Options for [`Query::reply`]. */
+export interface ReplyOptions {
+  /** Encoding of the reply payload. */
+  encoding?: string
+  /** Optional attachment carried alongside the reply. */
+  attachment?: string | Uint8Array
+  /** When `true`, the reply is sent unbatched, trading throughput for latency. */
+  express?: boolean
+  /** Timestamp to attach; obtain one from [`Session::newTimestamp`]. */
+  timestamp?: Timestamp
+  /** Source metadata (producing entity + sequence number). */
+  sourceInfo?: SourceInfo
+}
 
 /** Whether a sample was produced by a `put` or a `delete`. */
 export type SampleKind = /** Issued by a `put`. */

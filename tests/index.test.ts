@@ -196,3 +196,105 @@ test('declareSubscriber with a Ring channel keeps the latest sample', async () =
   subscriber.undeclare()
   await session.close()
 }, 15_000)
+
+test('get/queryable round-trip surfaces sample and error replies', async () => {
+  const session = await Session.open()
+  const queryable = await session.declareQueryable('demo/zenoh-ts/q')
+
+  // Answer the one incoming query with a sample reply, then an error reply.
+  const serve = (async () => {
+    for await (const query of queryable) {
+      expect(query.keyExpr).toBe('demo/zenoh-ts/q')
+      await query.reply('demo/zenoh-ts/q', 'answer')
+      await query.replyErr('boom')
+      break
+    }
+  })()
+
+  const replies = await session.get('demo/zenoh-ts/q')
+  const samples: string[] = []
+  const errors: string[] = []
+  for await (const reply of replies) {
+    // Flavor-B discriminant: `reply.sample` truthy => sample reply, else error.
+    if (reply.sample) {
+      samples.push(reply.sample.payload.toString())
+    } else {
+      expect(reply.sample).toBeNull()
+      errors.push(reply.payload.toString())
+    }
+    if (samples.length + errors.length === 2) break
+  }
+
+  await serve
+
+  expect(samples).toEqual(['answer'])
+  expect(errors).toEqual(['boom'])
+
+  queryable.undeclare()
+  await session.close()
+}, 15_000)
+
+test('Queryable.recv exposes query metadata and get carries a payload', async () => {
+  const session = await Session.open()
+  const queryable = await session.declareQueryable('demo/zenoh-ts/meta')
+
+  const replies = await session.get('demo/zenoh-ts/meta?arg=1', {
+    payload: 'q-payload',
+  })
+
+  const query = await queryable.recv()
+  expect(query).not.toBeNull()
+  expect(query!.keyExpr).toBe('demo/zenoh-ts/meta')
+  expect(query!.selector).toContain('arg=1')
+  expect(query!.parameters).toContain('arg=1')
+  expect(query!.payload?.toString()).toBe('q-payload')
+  await query!.reply('demo/zenoh-ts/meta', 'ok')
+
+  const reply = await replies.recv()
+  expect(reply).not.toBeNull()
+  expect(reply!.sample).not.toBeNull()
+  expect(reply!.sample!.payload.toString()).toBe('ok')
+
+  queryable.undeclare()
+  await session.close()
+}, 15_000)
+
+test('declareQuerier issues gets, round-trips, and exposes its config', async () => {
+  const session = await Session.open()
+  const queryable = await session.declareQueryable('demo/zenoh-ts/qr')
+
+  const querier = await session.declareQuerier('demo/zenoh-ts/qr', {
+    target: 'All',
+    consolidation: 'None',
+    congestionControl: 'Block',
+    priority: 'DataHigh',
+  })
+  expect(querier.keyExpr).toBe('demo/zenoh-ts/qr')
+  expect(querier.congestionControl).toBe('Block')
+  expect(querier.priority).toBe('DataHigh')
+  expect(typeof querier.id.zid).toBe('string')
+
+  // Answer the querier's one query.
+  const serve = (async () => {
+    for await (const query of queryable) {
+      expect(query.parameters).toContain('k=v')
+      await query.reply('demo/zenoh-ts/qr', 'pong')
+      break
+    }
+  })()
+
+  const replies = await querier.get({ parameters: 'k=v' })
+  const reply = await replies.recv()
+  expect(reply).not.toBeNull()
+  expect(reply!.sample).not.toBeNull()
+  expect(reply!.sample!.payload.toString()).toBe('pong')
+
+  await serve
+
+  const status = await querier.matchingStatus()
+  expect(typeof status.matching).toBe('boolean')
+
+  querier.undeclare()
+  queryable.undeclare()
+  await session.close()
+}, 15_000)
