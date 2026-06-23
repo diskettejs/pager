@@ -1,0 +1,164 @@
+//! `Publisher` — a declared publication endpoint with fixed QoS.
+//!
+//! Like subscriptions, publishers are always declared through zenoh-ext's
+//! advanced builder (see SPEC); with no advanced options set it behaves like a
+//! plain publisher. So the entity wraps an `AdvancedPublisher`.
+//!
+//! `AdvancedPublisher<'a>` is parameterised only by its key expression (the
+//! session is held internally as a `WeakSession`, not borrowed), so declaring
+//! with an owned `KeyExpr<'static>` yields an `AdvancedPublisher<'static>` that
+//! can live in this struct. It is not `Clone` and its `put`/`delete` builders
+//! borrow it, so — unlike `Session` — these methods borrow `&self` across the
+//! await rather than cloning first. The fixed config (`keyExpr`/`id`/`encoding`/
+//! `congestionControl`/`priority`) is cached so the getters stay infallible and
+//! survive `undeclare`.
+
+use napi::bindgen_prelude::{Either, Uint8Array};
+use napi_derive::napi;
+use zenoh::bytes::Encoding as ZEncoding;
+use zenoh::bytes::ZBytes;
+use zenoh::key_expr::KeyExpr as ZKeyExpr;
+use zenoh::qos::{CongestionControl as ZCongestionControl, Priority as ZPriority};
+use zenoh::session::EntityGlobalId as ZEntityGlobalId;
+use zenoh_ext::AdvancedPublisher;
+
+use crate::encoding::Encoding;
+use crate::entity_global_id::EntityGlobalId;
+use crate::keyexpr::KeyExpr;
+use crate::options::{PublisherDeleteOptions, PublisherPutOptions};
+use crate::qos::{CongestionControl, Priority};
+
+#[napi]
+pub struct Publisher {
+  // `None` once undeclared. The cached config below survives it.
+  inner: Option<AdvancedPublisher<'static>>,
+  key_expr: ZKeyExpr<'static>,
+  id: ZEntityGlobalId,
+  encoding: ZEncoding,
+  congestion_control: ZCongestionControl,
+  priority: ZPriority,
+}
+
+impl Publisher {
+  /// Internal constructor: cache the publisher's fixed config, then take
+  /// ownership of it.
+  pub(crate) fn from_inner(publisher: AdvancedPublisher<'static>) -> Self {
+    let key_expr = publisher.key_expr().clone();
+    let id = publisher.id();
+    let encoding = publisher.encoding().clone();
+    let congestion_control = publisher.congestion_control();
+    let priority = publisher.priority();
+    Publisher {
+      inner: Some(publisher),
+      key_expr,
+      id,
+      encoding,
+      congestion_control,
+      priority,
+    }
+  }
+}
+
+#[napi]
+impl Publisher {
+  /// The key expression this publisher publishes on.
+  #[napi(getter)]
+  pub fn key_expr(&self) -> KeyExpr {
+    KeyExpr::from_inner(self.key_expr.clone())
+  }
+
+  /// The global id of this publisher entity.
+  #[napi(getter)]
+  pub fn id(&self) -> EntityGlobalId {
+    EntityGlobalId::from_inner(self.id.clone())
+  }
+
+  /// The encoding applied to data published by this publisher.
+  #[napi(getter)]
+  pub fn encoding(&self) -> Encoding {
+    Encoding::from_inner(self.encoding.clone())
+  }
+
+  /// The congestion control applied when routing this publisher's data.
+  #[napi(getter)]
+  pub fn congestion_control(&self) -> CongestionControl {
+    self.congestion_control.into()
+  }
+
+  /// The priority of data published by this publisher.
+  #[napi(getter)]
+  pub fn priority(&self) -> Priority {
+    self.priority.into()
+  }
+
+  /// Publishes `payload` on this publisher's key expression.
+  #[napi]
+  pub async fn put(
+    &self,
+    payload: Either<String, Uint8Array>,
+    options: Option<PublisherPutOptions>,
+  ) -> napi::Result<()> {
+    let publisher = self
+      .inner
+      .as_ref()
+      .ok_or_else(|| napi::Error::from_reason("publisher has been undeclared"))?;
+    let payload: ZBytes = match payload {
+      Either::A(s) => ZBytes::from(s),
+      Either::B(bytes) => ZBytes::from(bytes.to_vec()),
+    };
+
+    let mut builder = publisher.put(payload);
+    if let Some(opts) = options {
+      if let Some(encoding) = opts.encoding {
+        builder = builder.encoding(encoding);
+      }
+      if let Some(timestamp) = opts.timestamp {
+        builder = builder.timestamp(timestamp.0);
+      }
+      if let Some(attachment) = opts.attachment {
+        builder = builder.attachment(attachment.to_vec());
+      }
+    }
+
+    builder
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  /// Publishes a delete on this publisher's key expression.
+  #[napi]
+  pub async fn delete(&self, options: Option<PublisherDeleteOptions>) -> napi::Result<()> {
+    let publisher = self
+      .inner
+      .as_ref()
+      .ok_or_else(|| napi::Error::from_reason("publisher has been undeclared"))?;
+
+    let mut builder = publisher.delete();
+    if let Some(opts) = options {
+      if let Some(timestamp) = opts.timestamp {
+        builder = builder.timestamp(timestamp.0);
+      }
+      if let Some(attachment) = opts.attachment {
+        builder = builder.attachment(attachment.to_vec());
+      }
+    }
+
+    builder
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  /// Undeclare this publisher. Resolves once undeclaration completes; a second
+  /// call is a no-op. `undeclare(self)` consumes the publisher, so the owned
+  /// value is `.take()`n out of the `Option` before awaiting.
+  #[napi]
+  pub async unsafe fn undeclare(&mut self) -> napi::Result<()> {
+    match self.inner.take() {
+      Some(publisher) => publisher
+        .undeclare()
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string())),
+      None => Ok(()),
+    }
+  }
+}
