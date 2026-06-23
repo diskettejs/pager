@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, test } from 'vitest'
-import { Querier, Session } from '../index.js'
+import { KeyExpr, Querier, Selector, Session } from '../index.js'
 import type {
   ChannelKind,
   FifoChannelHandlerReply,
@@ -12,8 +12,12 @@ import type {
   Subscriber,
 } from '../index.js'
 
-// `.test-d.ts` bodies are type-checked, never executed, so these are only ever
-// inspected for their types.
+// These assert only what the facade overloads narrow to — the channel-handler
+// *type* a call resolves to. The handler surface itself (does `stream()` exist,
+// does ring omit it) follows from that type and is fixed by the generated
+// declarations, so re-checking it here would test nothing the `toEqualTypeOf`
+// already guarantees. Method *behavior* belongs in executed runtime tests, since
+// `.test-d.ts` bodies are only type-checked, never run.
 const querier = new Querier()
 const session = new Session()
 
@@ -22,23 +26,14 @@ describe('Querier.get narrows the reply handler by channel kind', () => {
     expectTypeOf(await querier.get()).toEqualTypeOf<FifoChannelHandlerReply>()
   })
 
-  test("kind: 'Fifo' → FIFO handler with the full surface", async () => {
-    const replies = await querier.get({ handler: { kind: 'Fifo', capacity: 10 } })
-    expectTypeOf(replies).toEqualTypeOf<FifoChannelHandlerReply>()
-    // Full surface: async-iterator `stream()` plus introspection.
-    expectTypeOf(replies.stream).toBeFunction()
-    expectTypeOf(replies).toHaveProperty('isEmpty')
-    // TODO: `capacity` could narrow to `number` when a literal capacity is passed.
-    expectTypeOf(replies.capacity).toEqualTypeOf<number | null>()
+  test("kind: 'Fifo' → FIFO handler", async () => {
+    expectTypeOf(await querier.get({ handler: { kind: 'Fifo', capacity: 10 } }))
+      .toEqualTypeOf<FifoChannelHandlerReply>()
   })
 
-  test("kind: 'Ring' → Ring handler, receive-only", async () => {
-    const replies = await querier.get({ handler: { kind: 'Ring', capacity: 10 } })
-    expectTypeOf(replies).toEqualTypeOf<RingChannelHandlerReply>()
-    // Ring is sparse: no `stream()` / introspection getters.
-    expectTypeOf(replies).not.toHaveProperty('stream')
-    expectTypeOf(replies).not.toHaveProperty('capacity')
-    expectTypeOf(replies.recvAsync).toBeFunction()
+  test("kind: 'Ring' → Ring handler", async () => {
+    expectTypeOf(await querier.get({ handler: { kind: 'Ring', capacity: 10 } }))
+      .toEqualTypeOf<RingChannelHandlerReply>()
   })
 
   test('non-literal kind → union fallback', async () => {
@@ -54,18 +49,14 @@ describe('Liveliness.get narrows the reply handler by channel kind', () => {
     expectTypeOf(await liveliness.get('key/**')).toEqualTypeOf<FifoChannelHandlerReply>()
   })
 
-  test("kind: 'Fifo' → FIFO handler with the full surface", async () => {
-    const replies = await liveliness.get('key/**', { handler: { kind: 'Fifo', capacity: 10 } })
-    expectTypeOf(replies).toEqualTypeOf<FifoChannelHandlerReply>()
-    expectTypeOf(replies.stream).toBeFunction()
-    expectTypeOf(replies).toHaveProperty('isEmpty')
+  test("kind: 'Fifo' → FIFO handler", async () => {
+    expectTypeOf(await liveliness.get('key/**', { handler: { kind: 'Fifo', capacity: 10 } }))
+      .toEqualTypeOf<FifoChannelHandlerReply>()
   })
 
-  test("kind: 'Ring' → Ring handler, receive-only", async () => {
-    const replies = await liveliness.get('key/**', { handler: { kind: 'Ring', capacity: 10 } })
-    expectTypeOf(replies).toEqualTypeOf<RingChannelHandlerReply>()
-    expectTypeOf(replies).not.toHaveProperty('stream')
-    expectTypeOf(replies.recvAsync).toBeFunction()
+  test("kind: 'Ring' → Ring handler", async () => {
+    expectTypeOf(await liveliness.get('key/**', { handler: { kind: 'Ring', capacity: 10 } }))
+      .toEqualTypeOf<RingChannelHandlerReply>()
   })
 
   test('non-literal kind → union fallback', async () => {
@@ -74,19 +65,47 @@ describe('Liveliness.get narrows the reply handler by channel kind', () => {
   })
 })
 
-describe('Session.declareSubscriber narrows the subscriber handler', () => {
+describe('Session.get narrows the reply handler by channel kind', () => {
+  test('no options → FIFO handler (the default)', async () => {
+    expectTypeOf(await session.get('key/**')).toEqualTypeOf<FifoChannelHandlerReply>()
+  })
+
+  test("kind: 'Fifo' → FIFO handler", async () => {
+    expectTypeOf(await session.get('key/**', { handler: { kind: 'Fifo', capacity: 10 } }))
+      .toEqualTypeOf<FifoChannelHandlerReply>()
+  })
+
+  test("kind: 'Ring' → Ring handler", async () => {
+    expectTypeOf(await session.get('key/**', { handler: { kind: 'Ring', capacity: 10 } }))
+      .toEqualTypeOf<RingChannelHandlerReply>()
+  })
+
+  test('non-literal kind → union fallback', async () => {
+    const kind = 'Ring' as ChannelKind
+    expectTypeOf(await session.get('key/**', { handler: { kind } })).toEqualTypeOf<ReplyHandler>()
+  })
+
+  test('selector accepts a string, KeyExpr, or Selector', async () => {
+    // Unlike Querier/Liveliness, the key expression is per-call: a `key?p=1`
+    // string, a `KeyExpr` (no parameters), or a full `Selector` are all valid.
+    expectTypeOf(await session.get('key/**?p=1')).toEqualTypeOf<FifoChannelHandlerReply>()
+    expectTypeOf(await session.get(new KeyExpr('key/x'))).toEqualTypeOf<FifoChannelHandlerReply>()
+    expectTypeOf(await session.get(new Selector('key/x', 'p=1')))
+      .toEqualTypeOf<FifoChannelHandlerReply>()
+  })
+})
+
+describe('Session.declareSubscriber narrows the subscriber by channel kind', () => {
   test('no options → FIFO subscriber', async () => {
     const sub = await session.declareSubscriber('key/**')
     expectTypeOf(sub).toEqualTypeOf<Subscriber<FifoChannelHandlerSample>>()
     expectTypeOf(sub.handler).toEqualTypeOf<FifoChannelHandlerSample>()
-    expectTypeOf(sub.handler.stream).toBeFunction()
   })
 
-  test("kind: 'Ring' → Ring subscriber, receive-only handler", async () => {
+  test("kind: 'Ring' → Ring subscriber", async () => {
     const sub = await session.declareSubscriber('key/**', { handler: { kind: 'Ring' } })
     expectTypeOf(sub).toEqualTypeOf<Subscriber<RingChannelHandlerSample>>()
     expectTypeOf(sub.handler).toEqualTypeOf<RingChannelHandlerSample>()
-    expectTypeOf(sub.handler).not.toHaveProperty('stream')
   })
 
   test('SampleHandler is the union of both channel handlers', () => {

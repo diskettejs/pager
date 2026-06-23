@@ -24,17 +24,22 @@ import type {
   Config,
   FifoChannelHandlerReply,
   FifoChannelHandlerSample,
+  GetOptions,
   KeyExpr,
   LivelinessGetOptions,
   QuerierGetOptions,
   QuerierOptions,
   RingChannelHandlerReply,
   RingChannelHandlerSample,
+  Selector,
   SubscriberOptions,
 } from './binding.js';
 
 /** Anywhere a key expression is accepted as input. */
 export type KeyExprArg = string | KeyExpr;
+
+/** Anywhere a selector (key expression + optional parameters) is accepted as input. */
+export type SelectorArg = string | KeyExpr | Selector;
 
 /** The channel handler a `Subscriber` exposes, by channel kind. */
 export type SampleHandler = FifoChannelHandlerSample | RingChannelHandlerSample;
@@ -42,27 +47,19 @@ export type SampleHandler = FifoChannelHandlerSample | RingChannelHandlerSample;
 /** The reply handler a `get` resolves to, by channel kind. */
 export type ReplyHandler = FifoChannelHandlerReply | RingChannelHandlerReply;
 
-type FifoSubscriberOptions = Omit<SubscriberOptions, 'handler'> & {
+/**
+ * Narrows an options bag's `handler` to the default FIFO channel. `handler` stays
+ * optional because FIFO is the default when no channel is chosen.
+ */
+type FifoOptions<O> = Omit<O, 'handler'> & {
   handler?: { kind: 'Fifo'; capacity?: number };
 };
 
-type RingSubscriberOptions = Omit<SubscriberOptions, 'handler'> & {
-  handler: { kind: 'Ring'; capacity?: number };
-};
-
-type FifoQuerierGetOptions = Omit<QuerierGetOptions, 'handler'> & {
-  handler?: { kind: 'Fifo'; capacity?: number };
-};
-
-type RingQuerierGetOptions = Omit<QuerierGetOptions, 'handler'> & {
-  handler: { kind: 'Ring'; capacity?: number };
-};
-
-type FifoLivelinessGetOptions = Omit<LivelinessGetOptions, 'handler'> & {
-  handler?: { kind: 'Fifo'; capacity?: number };
-};
-
-type RingLivelinessGetOptions = Omit<LivelinessGetOptions, 'handler'> & {
+/**
+ * Narrows an options bag's `handler` to the ring channel. `handler` is required
+ * because the ring channel must be explicitly selected.
+ */
+type RingOptions<O> = Omit<O, 'handler'> & {
   handler: { kind: 'Ring'; capacity?: number };
 };
 
@@ -88,9 +85,9 @@ export declare class Subscriber<
  */
 export declare class Querier extends bindings.Querier {
   /** FIFO (default): the reply handler has the full receive + introspection + `stream()` surface. */
-  get(options?: FifoQuerierGetOptions | null): Promise<FifoChannelHandlerReply>;
+  get(options?: FifoOptions<QuerierGetOptions> | null): Promise<FifoChannelHandlerReply>;
   /** Ring: the reply handler exposes only the receive variants. */
-  get(options: RingQuerierGetOptions): Promise<RingChannelHandlerReply>;
+  get(options: RingOptions<QuerierGetOptions>): Promise<RingChannelHandlerReply>;
   /** Fallback when the channel `kind` isn't a literal. */
   get(options?: QuerierGetOptions | null): Promise<ReplyHandler>;
   /** Async-disposes by undeclaring the querier (`await using`). */
@@ -110,12 +107,12 @@ export declare class Liveliness extends bindings.Liveliness {
   /** FIFO (default): the reply handler has the full receive + introspection + `stream()` surface. */
   get(
     keyExpr: KeyExprArg,
-    options?: FifoLivelinessGetOptions | null,
+    options?: FifoOptions<LivelinessGetOptions> | null,
   ): Promise<FifoChannelHandlerReply>;
   /** Ring: the reply handler exposes only the receive variants. */
   get(
     keyExpr: KeyExprArg,
-    options: RingLivelinessGetOptions,
+    options: RingOptions<LivelinessGetOptions>,
   ): Promise<RingChannelHandlerReply>;
   /** Fallback when the channel `kind` isn't a literal. */
   get(
@@ -125,8 +122,8 @@ export declare class Liveliness extends bindings.Liveliness {
 }
 
 /**
- * A session whose `declareSubscriber` narrows the subscriber by channel kind and
- * whose `open` / `declareQuerier` / `liveliness` yield these narrowing facades.
+ * A session whose `declareSubscriber` / `get` narrow by channel kind and whose
+ * `open` / `declareQuerier` / `liveliness` yield these narrowing facades.
  * Inherits `put` / `close` / `declarePublisher` / `zid` / `isClosed` from the
  * generated `Session`.
  *
@@ -140,12 +137,12 @@ export declare class Session extends bindings.Session {
   /** FIFO (default): the handler has the full receive + introspection + `stream()` surface. */
   declareSubscriber(
     keyExpr: KeyExprArg,
-    options?: FifoSubscriberOptions | null,
+    options?: FifoOptions<SubscriberOptions> | null,
   ): Promise<Subscriber<FifoChannelHandlerSample>>;
   /** Ring: the handler exposes only the receive variants. */
   declareSubscriber(
     keyExpr: KeyExprArg,
-    options: RingSubscriberOptions,
+    options: RingOptions<SubscriberOptions>,
   ): Promise<Subscriber<RingChannelHandlerSample>>;
   /** Fallback when the channel `kind` isn't a literal. */
   declareSubscriber(
@@ -159,6 +156,15 @@ export declare class Session extends bindings.Session {
   ): Promise<Querier>;
   /** The liveliness sub-API, scoped to this session. */
   liveliness(): Liveliness;
+  /** FIFO (default): the reply handler has the full receive + introspection + `stream()` surface. */
+  get(
+    selector: SelectorArg,
+    options?: FifoOptions<GetOptions> | null,
+  ): Promise<FifoChannelHandlerReply>;
+  /** Ring: the reply handler exposes only the receive variants. */
+  get(selector: SelectorArg, options: RingOptions<GetOptions>): Promise<RingChannelHandlerReply>;
+  /** Fallback when the channel `kind` isn't a literal. */
+  get(selector: SelectorArg, options?: GetOptions | null): Promise<ReplyHandler>;
   /** Async-disposes by closing the session (`await using`). */
   [Symbol.asyncDispose](): Promise<void>;
 }

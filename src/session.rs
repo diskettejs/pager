@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use napi::bindgen_prelude::{Either, Uint8Array};
@@ -8,14 +9,17 @@ use zenoh::query::ConsolidationMode as ZConsolidationMode;
 use zenoh_ext::{AdvancedPublisherBuilderExt, AdvancedSubscriberBuilderExt};
 
 use crate::config::Config;
-use crate::handlers::{ChannelKind, DEFAULT_CHANNEL_CAPACITY};
+use crate::handlers::{
+  ChannelKind, DEFAULT_CHANNEL_CAPACITY, FifoChannelHandlerReply, RingChannelHandlerReply,
+};
 use crate::keyexpr::KeyExprArg;
 use crate::liveliness::Liveliness;
 use crate::options::{
-  PublisherOptions, PutOptions, QuerierOptions, SubscriberOptions, recovery_into_zenoh,
+  GetOptions, PublisherOptions, PutOptions, QuerierOptions, SubscriberOptions, recovery_into_zenoh,
 };
 use crate::publisher::Publisher;
 use crate::querier::Querier;
+use crate::selector::SelectorArg;
 use crate::subscriber::Subscriber;
 
 #[napi]
@@ -282,5 +286,86 @@ impl Session {
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(Querier::from_inner(querier))
+  }
+
+  /// Sends a one-shot query on `selector` and returns the reply handler. A
+  /// `FifoChannelHandler` or `RingChannelHandler` depending on the channel
+  /// chosen via the `handler` option (default: FIFO of
+  /// [`DEFAULT_CHANNEL_CAPACITY`]).
+  ///
+  /// The selector is a key expression plus optional parameters — pass a
+  /// `key/expr?p=1` string, a `KeyExpr` (no parameters), or a `Selector`. The
+  /// handler is not iterable; iterate via `replies.stream()`. It completes
+  /// (disconnects) once the query is resolved.
+  #[napi]
+  pub async fn get(
+    &self,
+    #[napi(ts_arg_type = "string | KeyExpr | Selector")] selector: SelectorArg,
+    options: Option<GetOptions>,
+  ) -> napi::Result<Either<FifoChannelHandlerReply, RingChannelHandlerReply>> {
+    let session = self.inner.clone();
+
+    let handler_cfg = options.as_ref().and_then(|o| o.handler.as_ref());
+    let capacity = handler_cfg
+      .and_then(|c| c.capacity)
+      .map(|c| c as usize)
+      .unwrap_or(DEFAULT_CHANNEL_CAPACITY);
+    let is_ring = handler_cfg.is_some_and(|c| matches!(c.kind, ChannelKind::Ring));
+
+    let mut builder = session.get(selector.0);
+    if let Some(opts) = options {
+      if let Some(target) = opts.target {
+        builder = builder.target(target.into());
+      }
+      if let Some(consolidation) = opts.consolidation {
+        builder = builder.consolidation(ZConsolidationMode::from(consolidation));
+      }
+      if let Some(congestion_control) = opts.congestion_control {
+        builder = builder.congestion_control(congestion_control.into());
+      }
+      if let Some(priority) = opts.priority {
+        builder = builder.priority(priority.into());
+      }
+      if let Some(express) = opts.express {
+        builder = builder.express(express);
+      }
+      if let Some(allowed_destination) = opts.allowed_destination {
+        builder = builder.allowed_destination(allowed_destination.into());
+      }
+      if let Some(timeout_ms) = opts.timeout {
+        builder = builder.timeout(Duration::from_millis(timeout_ms as u64));
+      }
+      if let Some(payload) = opts.payload {
+        builder = builder.payload(payload.to_vec());
+      }
+      if let Some(encoding) = opts.encoding {
+        builder = builder.encoding(encoding);
+      }
+      if let Some(attachment) = opts.attachment {
+        builder = builder.attachment(attachment.to_vec());
+      }
+      if let Some(source_info) = opts.source_info {
+        builder = builder.source_info(source_info.0);
+      }
+      if let Some(cancellation_token) = opts.cancellation_token {
+        builder = builder.cancellation_token(cancellation_token.0);
+      }
+    }
+
+    if is_ring {
+      let handler = builder
+        .with(RingChannel::new(capacity))
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      Ok(Either::B(RingChannelHandlerReply::from_arc(Arc::new(
+        handler,
+      ))))
+    } else {
+      let handler = builder
+        .with(FifoChannel::new(capacity))
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      Ok(Either::A(FifoChannelHandlerReply::from_handler(handler)))
+    }
   }
 }

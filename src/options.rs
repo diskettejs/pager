@@ -176,6 +176,8 @@ pub struct GetOptions {
   pub source_info: Option<SourceInfoArg>,
   #[napi(ts_type = "CancellationToken")]
   pub cancellation_token: Option<CancellationTokenArg>,
+  /// Channel selection for the reply handler (default: FIFO).
+  pub handler: Option<ChannelConfig>,
 }
 
 /// Options for `Session.declarePublisher` — mirrors `PublisherBuilder`.

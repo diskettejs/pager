@@ -1029,6 +1029,18 @@ export declare class Session {
   declarePublisher(keyExpr: string | KeyExpr, options?: PublisherOptions | undefined | null): Promise<Publisher>
   /** Declares a querier on `keyExpr`, fixing its config for every `get`. */
   declareQuerier(keyExpr: string | KeyExpr, options?: QuerierOptions | undefined | null): Promise<Querier>
+  /**
+   * Sends a one-shot query on `selector` and returns the reply handler. A
+   * `FifoChannelHandler` or `RingChannelHandler` depending on the channel
+   * chosen via the `handler` option (default: FIFO of
+   * [`DEFAULT_CHANNEL_CAPACITY`]).
+   *
+   * The selector is a key expression plus optional parameters — pass a
+   * `key/expr?p=1` string, a `KeyExpr` (no parameters), or a `Selector`. The
+   * handler is not iterable; iterate via `replies.stream()`. It completes
+   * (disconnects) once the query is resolved.
+   */
+  get(selector: string | KeyExpr | Selector, options?: GetOptions | undefined | null): Promise<FifoChannelHandlerReply | RingChannelHandlerReply>
 }
 
 export declare class SourceInfo {
@@ -1208,6 +1220,8 @@ export interface GetOptions {
   attachment?: Uint8Array
   sourceInfo?: SourceInfo
   cancellationToken?: CancellationToken
+  /** Channel selection for the reply handler (default: FIFO). */
+  handler?: ChannelConfig
 }
 
 export interface HeartbeatConfig {
