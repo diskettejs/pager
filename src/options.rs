@@ -280,6 +280,8 @@ pub struct QuerierGetOptions {
   pub source_info: Option<SourceInfoArg>,
   #[napi(ts_type = "CancellationToken")]
   pub cancellation_token: Option<CancellationTokenArg>,
+  /// Channel selection for the reply handler (default: FIFO).
+  pub handler: Option<ChannelConfig>,
 }
 
 /// Options for `Query.reply` — mirrors `ReplyBuilder`.

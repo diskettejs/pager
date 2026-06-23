@@ -1,38 +1,45 @@
 // Types for the entry wrapper (`index.js`). Re-exports the generated surface and
-// merges in the disposal members that `index.js` attaches at runtime. This
-// augmentation is the one thing that can't be expressed in Rust — NAPI-RS has no
-// codegen for the dispose symbols.
+// layers on the things NAPI-RS can't codegen: the `[Symbol.asyncDispose]` members
+// `index.js` patches onto the prototypes, and the generic/overload narrowing of
+// the channel-handler surface.
 //
-// Cleanup is async — `Session.close()` and `Subscriber.undeclare()` resolve over
-// the network — so both are `AsyncDisposable` (`await using`), with
-// `[Symbol.asyncDispose]` declared on the facade classes below and patched onto
-// the prototypes in `index.js`.
+// Rather than recreate entities member-for-member, the facade classes below
+// `extends` the generated classes (imported as `bindings.*` from `./binding.js`)
+// and declare ONLY what differs — `[Symbol.asyncDispose]` plus the members that
+// narrow by channel kind (`Subscriber.handler`, `Querier.get`,
+// `Session.declareSubscriber`). Everything else is inherited, so a newly
+// generated method needs no facade upkeep. A local `export declare class` of the
+// same name takes precedence over the `export *` re-export, so these replace the
+// generated `Subscriber` / `Querier` / `Session` types while the runtime values
+// still come from `binding.js`. The base must be `./binding.js` (the generated
+// classes), not `./index.js`, which would be self-referential.
 //
-// It also narrows the channel-handler surface. NAPI-RS can't express generics,
-// so the Rust `Subscriber.handler` getter returns the raw union
-// `FifoChannelHandlerSample | RingChannelHandlerSample`. The facade below makes
-// `Subscriber` generic over its handler and overloads `declareSubscriber` so the
-// channel `kind` picks the concrete handler — `for await (… of sub.handler.stream())`
-// type-checks for a FIFO subscriber, etc. A local `export declare class` of the
-// same name takes precedence over the `export *` re-export (no conflict), so
-// these replace the generated `Subscriber` / `Session` types while the runtime
-// values still come from `binding.js`.
+// Dispose-only entities (`Publisher`, `MatchingListener`, …) need no narrowing,
+// so they keep their generated type and gain just the dispose member via
+// `declare module './binding.js'` augmentation.
 export * from './binding.js';
 
+import * as bindings from './binding.js';
 import type {
   Config,
-  EntityGlobalId,
+  FifoChannelHandlerReply,
   FifoChannelHandlerSample,
   KeyExpr,
-  Publisher,
-  PublisherOptions,
-  PutOptions,
+  QuerierGetOptions,
+  QuerierOptions,
+  RingChannelHandlerReply,
   RingChannelHandlerSample,
   SubscriberOptions,
 } from './binding.js';
 
 /** Anywhere a key expression is accepted as input. */
 export type KeyExprArg = string | KeyExpr;
+
+/** The channel handler a `Subscriber` exposes, by channel kind. */
+export type SampleHandler = FifoChannelHandlerSample | RingChannelHandlerSample;
+
+/** The reply handler a `get` resolves to, by channel kind. */
+export type ReplyHandler = FifoChannelHandlerReply | RingChannelHandlerReply;
 
 type FifoSubscriberOptions = Omit<SubscriberOptions, 'handler'> & {
   handler?: { kind: 'Fifo'; capacity?: number };
@@ -42,41 +49,58 @@ type RingSubscriberOptions = Omit<SubscriberOptions, 'handler'> & {
   handler: { kind: 'Ring'; capacity?: number };
 };
 
+type FifoQuerierGetOptions = Omit<QuerierGetOptions, 'handler'> & {
+  handler?: { kind: 'Fifo'; capacity?: number };
+};
+
+type RingQuerierGetOptions = Omit<QuerierGetOptions, 'handler'> & {
+  handler: { kind: 'Ring'; capacity?: number };
+};
+
 /**
  * A live subscription whose `handler` narrows to the channel chosen at declare
- * time. Defaults to the union when the kind isn't statically known.
+ * time (defaults to the union). Inherits `keyExpr` / `id` / `undeclare` and
+ * `detectPublishers` / `sampleMissListener` from the generated `Subscriber`.
  */
-export declare class Subscriber<H extends SampleHandler = SampleHandler> {
-  /** The key expression this subscription matches. */
-  get keyExpr(): KeyExpr;
-  /** The global id of this subscription entity. */
-  get id(): EntityGlobalId;
-  /**
-   * The receive end of the subscription. The handler is not iterable; iterate
-   * via `subscriber.handler.stream()`.
-   */
+export declare class Subscriber<
+  H extends SampleHandler = SampleHandler,
+> extends bindings.Subscriber {
+  /** The receive end of the subscription, narrowed to the chosen channel. */
   get handler(): H;
-  /** Undeclare this subscription. Resolves once undeclaration completes. */
-  undeclare(): Promise<void>;
   /** Async-disposes by undeclaring the subscription (`await using`). */
   [Symbol.asyncDispose](): Promise<void>;
 }
 
-export declare class Session {
+/**
+ * A declared querier whose `get` narrows the reply handler to the channel chosen
+ * via the `handler` option (mirroring zenoh, where `replies` is the handler).
+ * Inherits `matchingListener` / `matchingStatus` / `undeclare` and the config
+ * getters from the generated `Querier`.
+ */
+export declare class Querier extends bindings.Querier {
+  /** FIFO (default): the reply handler has the full receive + introspection + `stream()` surface. */
+  get(options?: FifoQuerierGetOptions | null): Promise<FifoChannelHandlerReply>;
+  /** Ring: the reply handler exposes only the receive variants. */
+  get(options: RingQuerierGetOptions): Promise<RingChannelHandlerReply>;
+  /** Fallback when the channel `kind` isn't a literal. */
+  get(options?: QuerierGetOptions | null): Promise<ReplyHandler>;
+  /** Async-disposes by undeclaring the querier (`await using`). */
+  [Symbol.asyncDispose](): Promise<void>;
+}
+
+/**
+ * A session whose `declareSubscriber` narrows the subscriber by channel kind and
+ * whose `open` / `declareQuerier` yield these narrowing facades. Inherits `put` /
+ * `close` / `declarePublisher` / `liveliness` / `zid` / `isClosed` from the
+ * generated `Session`.
+ *
+ * `open` and `declareQuerier` are overridden only to return the facade types —
+ * otherwise a session/querier obtained from them would be the un-narrowed
+ * generated class.
+ */
+export declare class Session extends bindings.Session {
   /** Opens a session with the given configuration. */
   static open(config: Config): Promise<Session>;
-  /** This session's Zenoh id, as a hex string. */
-  get zid(): string;
-  /** Whether the session has been closed. */
-  get isClosed(): boolean;
-  /** Closes the session, undeclaring everything declared on it. */
-  close(): Promise<void>;
-  /** Publishes `payload` on `keyExpr`. */
-  put(
-    keyExpr: KeyExprArg,
-    payload: string | Uint8Array,
-    options?: PutOptions | null,
-  ): Promise<void>;
   /** FIFO (default): the handler has the full receive + introspection + `stream()` surface. */
   declareSubscriber(
     keyExpr: KeyExprArg,
@@ -92,19 +116,15 @@ export declare class Session {
     keyExpr: KeyExprArg,
     options?: SubscriberOptions | null,
   ): Promise<Subscriber>;
-  /** Declares a publisher with fixed QoS on `keyExpr`. */
-  declarePublisher(
+  /** Declares a querier on `keyExpr`, fixing its config for every `get`. */
+  declareQuerier(
     keyExpr: KeyExprArg,
-    options?: PublisherOptions | null,
-  ): Promise<Publisher>;
+    options?: QuerierOptions | null,
+  ): Promise<Querier>;
   /** Async-disposes by closing the session (`await using`). */
   [Symbol.asyncDispose](): Promise<void>;
 }
 
-// `Publisher`, `MatchingListener`, and `SampleMissListener` need no generic
-// narrowing here (their handler unions are left as generated), so rather than
-// shadowing facade classes they keep their generated types and gain only the
-// dispose member, merged in by augmenting the binding module's classes.
 declare module './binding.js' {
   interface Publisher {
     /** Async-disposes by undeclaring the publisher (`await using`). */
@@ -127,8 +147,3 @@ declare module './binding.js' {
     [Symbol.asyncDispose](): Promise<void>;
   }
 }
-
-// Future entities (Queryable / Querier / Scout) get `[Symbol.asyncDispose]` the
-// same way as they land: declare it on the entity (a facade class here, or via
-// `declare module './binding.js'` augmentation for non-shadowed types like
-// `Publisher` above) and patch the prototype in `index.js`.

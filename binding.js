@@ -590,7 +590,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { Bytes, CancellationToken, Config, Deserializer, Encoding, EndPoint, EntityGlobalId, FifoChannelHandlerMatchingStatus, FifoChannelHandlerMiss, FifoChannelHandlerSample, Hello, KeyExpr, Liveliness, LivelinessSubscriber, LivelinessToken, Locator, MatchingListener, MatchingStatus, MatchingStatusStream, Metadata, Miss, MissStream, Parameters, Publisher, Reply, ReplyError, RingChannelHandlerMatchingStatus, RingChannelHandlerMiss, RingChannelHandlerSample, Sample, SampleMissListener, SampleStream, Selector, Serializer, Session, SourceInfo, Subscriber, TimeRange, Timestamp, WhatAmIMatcher, ChannelKind, CongestionControl, ConsolidationMode, HeartbeatMode, Locality, PeriodicQueriesMode, Priority, QueryTarget, Reliability, ReplyKeyExpr, SampleKind, WhatAmI } = nativeBinding
+const { Bytes, CancellationToken, Config, Deserializer, Encoding, EndPoint, EntityGlobalId, FifoChannelHandlerMatchingStatus, FifoChannelHandlerMiss, FifoChannelHandlerReply, FifoChannelHandlerSample, Hello, KeyExpr, Liveliness, LivelinessSubscriber, LivelinessToken, Locator, MatchingListener, MatchingStatus, MatchingStatusStream, Metadata, Miss, MissStream, Parameters, Publisher, Querier, Reply, ReplyError, ReplyStream, RingChannelHandlerMatchingStatus, RingChannelHandlerMiss, RingChannelHandlerReply, RingChannelHandlerSample, Sample, SampleMissListener, SampleStream, Selector, Serializer, Session, SourceInfo, Subscriber, TimeRange, Timestamp, WhatAmIMatcher, ChannelKind, CongestionControl, ConsolidationMode, HeartbeatMode, Locality, PeriodicQueriesMode, Priority, QueryTarget, Reliability, ReplyKeyExpr, SampleKind, WhatAmI } = nativeBinding
 export { Bytes }
 export { CancellationToken }
 export { Config }
@@ -600,6 +600,7 @@ export { EndPoint }
 export { EntityGlobalId }
 export { FifoChannelHandlerMatchingStatus }
 export { FifoChannelHandlerMiss }
+export { FifoChannelHandlerReply }
 export { FifoChannelHandlerSample }
 export { Hello }
 export { KeyExpr }
@@ -615,10 +616,13 @@ export { Miss }
 export { MissStream }
 export { Parameters }
 export { Publisher }
+export { Querier }
 export { Reply }
 export { ReplyError }
+export { ReplyStream }
 export { RingChannelHandlerMatchingStatus }
 export { RingChannelHandlerMiss }
+export { RingChannelHandlerReply }
 export { RingChannelHandlerSample }
 export { Sample }
 export { SampleMissListener }

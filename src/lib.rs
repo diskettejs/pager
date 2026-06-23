@@ -26,6 +26,7 @@ mod options;
 mod parameters;
 mod publisher;
 mod qos;
+mod querier;
 mod query;
 mod reply;
 mod reply_error;

@@ -8,6 +8,7 @@ use napi_derive::napi;
 // stays a bare `Type::Path` and the signature is generated.
 use crate::matching_status::MatchingStatus;
 use crate::miss::Miss;
+use crate::reply::Reply;
 use crate::sample::Sample;
 
 /// Which channel backs a subscription's handler.
@@ -315,4 +316,27 @@ ring_channel_handler!(
 impl_ring_source!(
   zenoh_ext::SampleMissListener<zenoh::handlers::RingChannelHandler<zenoh_ext::Miss>>,
   zenoh_ext::Miss
+);
+
+// `Reply` handler — produced by `get` (`Querier`/`Session`/`Liveliness`). A get
+// resolves directly to its handler, so there's no producer entity to hold; the
+// resolved `RingChannelHandler<Reply>` is its own `RingSource` (the channel is
+// kept alive by zenoh's background query task, not by us).
+fifo_channel_handler!(
+  FifoChannelHandlerReply,
+  ReplyStream,
+  Reply,
+  zenoh::query::Reply,
+  Reply::from_inner
+);
+
+ring_channel_handler!(
+  RingChannelHandlerReply,
+  Reply,
+  zenoh::query::Reply,
+  Reply::from_inner
+);
+impl_ring_source!(
+  zenoh::handlers::RingChannelHandler<zenoh::query::Reply>,
+  zenoh::query::Reply
 );

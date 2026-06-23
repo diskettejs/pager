@@ -245,6 +245,40 @@ export declare class FifoChannelHandlerMiss {
   sameChannel(other: FifoChannelHandlerMiss): boolean
 }
 
+export declare class FifoChannelHandlerReply {
+  /**
+   * Receives the next value, resolving when one is available. Rejects once
+   * the channel is disconnected (the producer has been dropped).
+   */
+  recvAsync(): Promise<Reply>
+  /**
+   * Receives a value without blocking, returning `null` if the channel is
+   * currently empty.
+   */
+  tryRecv(): Reply | null
+  /**
+   * Returns an async-iterator object over the channel, for use with
+   * `for await`. The handler itself is not iterable; iteration lives here.
+   */
+  stream(): ReplyStream
+  /** The number of values currently queued. */
+  get len(): number
+  /** The channel's bound, or `null` if unbounded. */
+  get capacity(): number | null
+  /** Whether the channel currently holds no values. */
+  get isEmpty(): boolean
+  /** Whether the channel is currently at capacity. */
+  get isFull(): boolean
+  /** The number of senders feeding this channel. */
+  get senderCount(): number
+  /** The number of receivers sharing this channel. */
+  get receiverCount(): number
+  /** Whether the channel has been disconnected (all senders dropped). */
+  get isDisconnected(): boolean
+  /** Whether `other` is a handle to the same underlying channel. */
+  sameChannel(other: FifoChannelHandlerReply): boolean
+}
+
 export declare class FifoChannelHandlerSample {
   /**
    * Receives the next value, resolving when one is available. Rejects once
@@ -542,6 +576,49 @@ export declare class Publisher {
   undeclare(): Promise<void>
 }
 
+export declare class Querier {
+  /** The key expression this querier sends queries on. */
+  get keyExpr(): KeyExpr
+  /** The global id of this querier entity. */
+  get id(): EntityGlobalId
+  /** The congestion control applied when routing this querier's queries. */
+  get congestionControl(): CongestionControl
+  /** The priority of this querier's queries. */
+  get priority(): Priority
+  /**
+   * Whether this querier accepts replies whose key expression doesn't match
+   * the query.
+   */
+  get acceptReplies(): ReplyKeyExpr
+  /**
+   * Sends a query and returns the reply handler. A `FifoChannelHandler` or
+   * `RingChannelHandler` depending on the channel chosen via the `handler`
+   * option (default: FIFO of [`DEFAULT_CHANNEL_CAPACITY`]).
+   *
+   * The handler is not iterable; iterate via `replies.stream()`. It completes
+   * (disconnects) once the query is resolved.
+   */
+  get(options?: QuerierGetOptions | undefined | null): Promise<FifoChannelHandlerReply | RingChannelHandlerReply>
+  /**
+   * The current matching status of this querier — whether any queryables match
+   * its key expression and target.
+   */
+  matchingStatus(): Promise<MatchingStatus>
+  /**
+   * Declares a listener that notifies whenever this querier's matching status
+   * changes (matching queryables appear or disappear).
+   *
+   * The `handler` option chooses the channel (default: FIFO of
+   * [`DEFAULT_CHANNEL_CAPACITY`]).
+   */
+  matchingListener(options?: MatchingListenerOptions | undefined | null): Promise<MatchingListener>
+  /**
+   * Undeclare this querier. Resolves once undeclaration completes; a second
+   * call is a no-op.
+   */
+  undeclare(): Promise<void>
+}
+
 export declare class Reply {
   result(): Sample | ReplyError
   get replierId(): EntityGlobalId | null
@@ -550,6 +627,16 @@ export declare class Reply {
 export declare class ReplyError {
   get encoding(): Encoding
   get payload(): Bytes
+}
+
+/**
+ * This type implements JavaScript's async iterable protocol.
+ * It can be used with `for await...of` loops.
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_async_iterator_and_async_iterable_protocols
+ */
+export declare class ReplyStream {
+  [Symbol.asyncIterator](): AsyncGenerator<Reply, void, undefined>
 }
 
 export declare class RingChannelHandlerMatchingStatus {
@@ -576,6 +663,19 @@ export declare class RingChannelHandlerMiss {
    * currently empty.
    */
   tryRecv(): Miss | null
+}
+
+export declare class RingChannelHandlerReply {
+  /**
+   * Receives the next value, resolving when one is available. Rejects once
+   * the producer is gone (the ring's strong owner has been dropped).
+   */
+  recvAsync(): Promise<Reply>
+  /**
+   * Receives a value without blocking, returning `null` if the ring is
+   * currently empty.
+   */
+  tryRecv(): Reply | null
 }
 
 export declare class RingChannelHandlerSample {
@@ -737,6 +837,8 @@ export declare class Session {
    * applied to the advanced builder.
    */
   declarePublisher(keyExpr: string | KeyExpr, options?: PublisherOptions | undefined | null): Promise<Publisher>
+  /** Declares a querier on `keyExpr`, fixing its config for every `get`. */
+  declareQuerier(keyExpr: string | KeyExpr, options?: QuerierOptions | undefined | null): Promise<Querier>
 }
 
 export declare class SourceInfo {
@@ -1045,6 +1147,8 @@ export interface QuerierGetOptions {
   attachment?: Uint8Array
   sourceInfo?: SourceInfo
   cancellationToken?: CancellationToken
+  /** Channel selection for the reply handler (default: FIFO). */
+  handler?: ChannelConfig
 }
 
 /** Options for `Session.declareQuerier` — mirrors `QuerierBuilder`. */

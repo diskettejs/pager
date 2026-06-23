@@ -32,8 +32,8 @@
     "prepublishOnly": "napi prepublish -t npm",
     "version": "napi version",
     "lint": "cargo fmt && cargo clippy",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --typecheck",
+    "test:watch": "vitest --typecheck",
     "typecheck": "tsc",
     "fmt:js": "oxfmt",
     "fmt:rs": "cargo fmt"
@@ -45,7 +45,7 @@
     "@types/node": "^25.9.3",
     "oxfmt": "^0.55.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "4.1.9"
   },
   "napi": {
     "binaryName": "dialtone",
