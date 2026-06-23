@@ -22,13 +22,13 @@ impl SourceInfo {
   #[napi(constructor)]
   pub fn new(source_id: &EntityGlobalId, source_sn: u32) -> Self {
     SourceInfo {
-      inner: ZSourceInfo::new(source_id.inner.clone(), source_sn),
+      inner: ZSourceInfo::new(source_id.inner, source_sn),
     }
   }
 
   #[napi(getter)]
   pub fn source_id(&self) -> EntityGlobalId {
-    EntityGlobalId::from_inner(self.inner.source_id().clone())
+    EntityGlobalId::from_inner(*self.inner.source_id())
   }
 
   #[napi(getter)]

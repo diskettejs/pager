@@ -294,7 +294,10 @@ impl Encoding {
     Self::from_inner(ZEncoding::VIDEO_VP9)
   }
 
+  // Exposed to JS as `toString()`; napi cannot surface a `Display` impl, so the
+  // inherent method is deliberate despite clippy's `inherent_to_string` lint.
   #[napi]
+  #[allow(clippy::inherent_to_string)]
   pub fn to_string(&self) -> String {
     self.inner.to_string()
   }

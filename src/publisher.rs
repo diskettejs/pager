@@ -74,7 +74,7 @@ impl Publisher {
   /// The global id of this publisher entity.
   #[napi(getter)]
   pub fn id(&self) -> EntityGlobalId {
-    EntityGlobalId::from_inner(self.id.clone())
+    EntityGlobalId::from_inner(self.id)
   }
 
   /// The encoding applied to data published by this publisher.

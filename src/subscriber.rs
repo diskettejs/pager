@@ -66,7 +66,7 @@ impl Subscriber {
   /// The global id of this subscription entity.
   #[napi(getter)]
   pub fn id(&self) -> EntityGlobalId {
-    EntityGlobalId::from_inner(self.id.clone())
+    EntityGlobalId::from_inner(self.id)
   }
 
   /// The receive end of the subscription. A `FifoChannelHandler` or
