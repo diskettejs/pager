@@ -767,6 +767,18 @@ export declare class Subscriber {
    */
   sampleMissListener(options?: SampleMissListenerOptions | undefined | null): Promise<SampleMissListener>
   /**
+   * Declares a liveliness subscription that detects publishers matching this
+   * subscription's key expression.
+   *
+   * Only publishers that enable `publisherDetection` are detectable. Resolves
+   * to a `LivelinessSubscriber` over the derived detection key expression (a
+   * `Put` marks a publisher appearing, a `Delete` one disappearing). The
+   * `handler` option chooses the channel (default: FIFO of
+   * [`DEFAULT_CHANNEL_CAPACITY`]); `history` replays the currently-matching
+   * publishers on declaration.
+   */
+  detectPublishers(options?: LivelinessSubscriberOptions | undefined | null): Promise<LivelinessSubscriber>
+  /**
    * Undeclare this subscription. Resolves once undeclaration completes; a
    * second call is a no-op.
    *

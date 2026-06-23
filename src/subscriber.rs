@@ -13,7 +13,8 @@ use crate::handlers::{
   ChannelKind, DEFAULT_CHANNEL_CAPACITY, FifoChannelHandlerSample, RingChannelHandlerSample,
 };
 use crate::keyexpr::KeyExpr;
-use crate::options::SampleMissListenerOptions;
+use crate::liveliness_subscriber::LivelinessSubscriber;
+use crate::options::{LivelinessSubscriberOptions, SampleMissListenerOptions};
 use crate::sample_miss_listener::SampleMissListener;
 
 enum SubInner {
@@ -127,6 +128,59 @@ impl Subscriber {
         .await
         .map_err(|e| napi::Error::from_reason(e.to_string()))?;
       Ok(SampleMissListener::from_fifo(listener))
+    }
+  }
+
+  /// Declares a liveliness subscription that detects publishers matching this
+  /// subscription's key expression.
+  ///
+  /// Only publishers that enable `publisherDetection` are detectable. Resolves
+  /// to a `LivelinessSubscriber` over the derived detection key expression (a
+  /// `Put` marks a publisher appearing, a `Delete` one disappearing). The
+  /// `handler` option chooses the channel (default: FIFO of
+  /// [`DEFAULT_CHANNEL_CAPACITY`]); `history` replays the currently-matching
+  /// publishers on declaration.
+  #[napi]
+  pub async fn detect_publishers(
+    &self,
+    options: Option<LivelinessSubscriberOptions>,
+  ) -> napi::Result<LivelinessSubscriber> {
+    let handler_cfg = options.as_ref().and_then(|o| o.handler.as_ref());
+    let capacity = handler_cfg
+      .and_then(|c| c.capacity)
+      .map(|c| c as usize)
+      .unwrap_or(DEFAULT_CHANNEL_CAPACITY);
+    let is_ring = handler_cfg.is_some_and(|c| matches!(c.kind, ChannelKind::Ring));
+    let history = options.as_ref().and_then(|o| o.history).unwrap_or(false);
+
+    // The builder type (`LivelinessSubscriberBuilder<'_, '_, DefaultHandler>`) is
+    // the same for both subscription channels, so unify before picking the
+    // detection subscriber's channel below.
+    let mut builder = match self.inner.as_ref() {
+      Some(SubInner::Fifo(sub)) => sub.detect_publishers(),
+      Some(SubInner::Ring(arc)) => arc.detect_publishers(),
+      None => return Err(napi::Error::from_reason("subscriber has been undeclared")),
+    };
+    if history {
+      builder = builder.history(true);
+    }
+
+    if is_ring {
+      let sub = builder
+        .with(RingChannel::new(capacity))
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      let key_expr = sub.key_expr().clone();
+      let id = sub.id();
+      Ok(LivelinessSubscriber::from_ring(sub, key_expr, id))
+    } else {
+      let sub = builder
+        .with(FifoChannel::new(capacity))
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      let key_expr = sub.key_expr().clone();
+      let id = sub.id();
+      Ok(LivelinessSubscriber::from_fifo(sub, key_expr, id))
     }
   }
 
