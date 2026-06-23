@@ -6,6 +6,7 @@ use napi_derive::napi;
 // the `AsyncGenerator::Yield` type (the `[Symbol.asyncIterator]` TS signature is
 // then dropped). An `:ident` is not group-wrapped, so `type Yield = Sample;`
 // stays a bare `Type::Path` and the signature is generated.
+use crate::hello::Hello;
 use crate::matching_status::MatchingStatus;
 use crate::miss::Miss;
 use crate::query::Query;
@@ -473,4 +474,25 @@ ring_channel_handler!(
 impl_ring_source!(
   zenoh::query::Queryable<zenoh::handlers::RingChannelHandler<zenoh::query::Query>>,
   zenoh::query::Query
+);
+
+// `Hello` handler — produced by `scout`. The ring producer is the `Scout`, which
+// `Deref`s to its `RingChannelHandler<Hello>`.
+fifo_channel_handler!(
+  FifoChannelHandlerHello,
+  HelloStream,
+  Hello,
+  zenoh::scouting::Hello,
+  Hello::from_inner
+);
+
+ring_channel_handler!(
+  RingChannelHandlerHello,
+  Hello,
+  zenoh::scouting::Hello,
+  Hello::from_inner
+);
+impl_ring_source!(
+  zenoh::scouting::Scout<zenoh::handlers::RingChannelHandler<zenoh::scouting::Hello>>,
+  zenoh::scouting::Hello
 );

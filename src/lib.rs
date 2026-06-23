@@ -33,6 +33,7 @@ mod reply;
 mod reply_error;
 mod sample;
 mod sample_miss_listener;
+mod scout;
 mod selector;
 mod serialization;
 mod session;

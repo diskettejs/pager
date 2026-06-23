@@ -345,3 +345,10 @@ pub struct LivelinessGetOptions {
   /// Channel selection for the reply handler (default: FIFO).
   pub handler: Option<ChannelConfig>,
 }
+
+/// Options for `scout` — mirrors `ScoutBuilder`.
+#[napi(object, object_to_js = false)]
+pub struct ScoutOptions {
+  /// Channel selection for the `Hello` handler (default: FIFO).
+  pub handler: Option<ChannelConfig>,
+}

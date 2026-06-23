@@ -22,6 +22,7 @@ export * from './binding.js';
 import * as bindings from './binding.js';
 import type {
   Config,
+  FifoChannelHandlerHello,
   FifoChannelHandlerQuery,
   FifoChannelHandlerReply,
   FifoChannelHandlerSample,
@@ -31,11 +32,14 @@ import type {
   QuerierGetOptions,
   QuerierOptions,
   QueryableOptions,
+  RingChannelHandlerHello,
   RingChannelHandlerQuery,
   RingChannelHandlerReply,
   RingChannelHandlerSample,
+  ScoutOptions,
   Selector,
   SubscriberOptions,
+  WhatAmIMatcher,
 } from './binding.js';
 
 /** Anywhere a key expression is accepted as input. */
@@ -52,6 +56,9 @@ export type ReplyHandler = FifoChannelHandlerReply | RingChannelHandlerReply;
 
 /** The query handler a `Queryable` exposes, by channel kind. */
 export type QueryHandler = FifoChannelHandlerQuery | RingChannelHandlerQuery;
+
+/** The `Hello` handler a `Scout` exposes, by channel kind. */
+export type HelloHandler = FifoChannelHandlerHello | RingChannelHandlerHello;
 
 /**
  * Narrows an options bag's `handler` to the default FIFO channel. `handler` stays
@@ -95,6 +102,41 @@ export declare class Queryable<
   get handler(): H;
   /** Async-disposes by undeclaring the queryable (`await using`). */
   [Symbol.asyncDispose](): Promise<void>;
+}
+
+/**
+ * A running scout whose `handler` (the `Hello` channel) narrows to the channel
+ * chosen via the `handler` option (defaults to the union). Created via the
+ * static `Scout.scout` factory (mirroring `Session.open`).
+ *
+ * Unlike the session entities, stopping a scout cancels a local task with no
+ * network round-trip, so it is synchronously `Disposable` (`using`), not async.
+ */
+export declare class Scout<
+  H extends HelloHandler = HelloHandler,
+> extends bindings.Scout {
+  /** FIFO (default): the handler has the full receive + introspection + `stream()` surface. */
+  static scout(
+    what: WhatAmIMatcher,
+    config: Config,
+    options?: FifoOptions<ScoutOptions> | null,
+  ): Promise<Scout<FifoChannelHandlerHello>>;
+  /** Ring: the handler exposes only the receive variants. */
+  static scout(
+    what: WhatAmIMatcher,
+    config: Config,
+    options: RingOptions<ScoutOptions>,
+  ): Promise<Scout<RingChannelHandlerHello>>;
+  /** Fallback when the channel `kind` isn't a literal. */
+  static scout(
+    what: WhatAmIMatcher,
+    config: Config,
+    options?: ScoutOptions | null,
+  ): Promise<Scout>;
+  /** The receive end delivering `Hello` replies, narrowed to the chosen channel. */
+  get handler(): H;
+  /** Synchronously disposes by stopping the scout (`using`). */
+  [Symbol.dispose](): void;
 }
 
 /**

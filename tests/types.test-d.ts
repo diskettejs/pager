@@ -1,14 +1,17 @@
 import { describe, expectTypeOf, test } from 'vitest'
-import { KeyExpr, Querier, Selector, Session } from '../index.js'
+import { Config, KeyExpr, Querier, Scout, Selector, Session, WhatAmIMatcher } from '../index.js'
 import type {
   ChannelKind,
+  FifoChannelHandlerHello,
   FifoChannelHandlerQuery,
   FifoChannelHandlerReply,
   FifoChannelHandlerSample,
+  HelloHandler,
   Liveliness,
   QueryHandler,
   Queryable,
   ReplyHandler,
+  RingChannelHandlerHello,
   RingChannelHandlerQuery,
   RingChannelHandlerReply,
   RingChannelHandlerSample,
@@ -135,6 +138,38 @@ describe('Session.declareQueryable narrows the queryable by channel kind', () =>
   test('QueryHandler is the union of both channel handlers', () => {
     expectTypeOf<QueryHandler>().toEqualTypeOf<
       FifoChannelHandlerQuery | RingChannelHandlerQuery
+    >()
+  })
+})
+
+describe('Scout.scout narrows the Hello handler by channel kind', () => {
+  const what = WhatAmIMatcher.empty()
+  const config = Config.default()
+
+  test('no options → FIFO scout (the default)', async () => {
+    expectTypeOf(await Scout.scout(what, config)).toEqualTypeOf<Scout<FifoChannelHandlerHello>>()
+  })
+
+  test("kind: 'Fifo' → FIFO scout", async () => {
+    const scout = await Scout.scout(what, config, { handler: { kind: 'Fifo', capacity: 10 } })
+    expectTypeOf(scout).toEqualTypeOf<Scout<FifoChannelHandlerHello>>()
+    expectTypeOf(scout.handler).toEqualTypeOf<FifoChannelHandlerHello>()
+  })
+
+  test("kind: 'Ring' → Ring scout", async () => {
+    const scout = await Scout.scout(what, config, { handler: { kind: 'Ring', capacity: 10 } })
+    expectTypeOf(scout).toEqualTypeOf<Scout<RingChannelHandlerHello>>()
+    expectTypeOf(scout.handler).toEqualTypeOf<RingChannelHandlerHello>()
+  })
+
+  test('non-literal kind → union fallback', async () => {
+    const kind = 'Ring' as ChannelKind
+    expectTypeOf(await Scout.scout(what, config, { handler: { kind } })).toEqualTypeOf<Scout>()
+  })
+
+  test('HelloHandler is the union of both channel handlers', () => {
+    expectTypeOf<HelloHandler>().toEqualTypeOf<
+      FifoChannelHandlerHello | RingChannelHandlerHello
     >()
   })
 })

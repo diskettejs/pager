@@ -177,6 +177,66 @@ export declare class EntityGlobalId {
   get eid(): number
 }
 
+export declare class FifoChannelHandlerHello {
+  /**
+   * Receives the next value, resolving when one is available. Rejects once
+   * the channel is disconnected (the producer has been dropped).
+   */
+  recvAsync(): Promise<Hello>
+  /**
+   * Receives a value without blocking, returning `null` if the channel is
+   * currently empty.
+   */
+  tryRecv(): Hello | null
+  /**
+   * Resolves with the next value once one is available, rejecting if the
+   * channel disconnects (all senders dropped). Unlike `recvAsync`, zenoh's
+   * `recv` is a synchronous blocking call; it is run on a worker thread so
+   * the wait never freezes the JS event loop.
+   */
+  recv(): Promise<Hello>
+  /**
+   * Resolves with the next value, or `null` if `timeoutMs` milliseconds
+   * elapse first. Rejects if the channel disconnects. The blocking wait
+   * runs on a worker thread.
+   */
+  recvTimeout(timeoutMs: number): Promise<Hello | null>
+  /**
+   * Resolves with the next value, or `null` once the wall-clock
+   * `deadlineMs` (epoch milliseconds, e.g. from `Date.now()`) passes.
+   * Rejects if the channel disconnects. The blocking wait runs on a worker
+   * thread.
+   */
+  recvDeadline(deadlineMs: number): Promise<Hello | null>
+  /**
+   * Takes every value currently queued and returns them as an array,
+   * without blocking. Unlike repeated `tryRecv`, no further values are
+   * fetched from the channel once this snapshot is taken.
+   */
+  drain(): Array<Hello>
+  /**
+   * Returns an async-iterator object over the channel, for use with
+   * `for await`. The handler itself is not iterable; iteration lives here.
+   */
+  stream(): HelloStream
+  /** The number of values currently queued. */
+  get len(): number
+  /** The channel's bound, or `null` if unbounded. */
+  get capacity(): number | null
+  /** Whether the channel currently holds no values. */
+  get isEmpty(): boolean
+  /** Whether the channel is currently at capacity. */
+  get isFull(): boolean
+  /** The number of senders feeding this channel. */
+  get senderCount(): number
+  /** The number of receivers sharing this channel. */
+  get receiverCount(): number
+  /** Whether the channel has been disconnected (all senders dropped). */
+  get isDisconnected(): boolean
+  /** Whether `other` is a handle to the same underlying channel. */
+  sameChannel(other: FifoChannelHandlerHello): boolean
+}
+
 export declare class FifoChannelHandlerMatchingStatus {
   /**
    * Receives the next value, resolving when one is available. Rejects once
@@ -481,6 +541,16 @@ export declare class Hello {
   locators(): Array<Locator>
   get whatami(): WhatAmI
   get zid(): string
+}
+
+/**
+ * This type implements JavaScript's async iterable protocol.
+ * It can be used with `for await...of` loops.
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_async_iterator_and_async_iterable_protocols
+ */
+export declare class HelloStream {
+  [Symbol.asyncIterator](): AsyncGenerator<Hello, void, undefined>
 }
 
 export declare class KeyExpr {
@@ -899,6 +969,38 @@ export declare class ReplyStream {
   [Symbol.asyncIterator](): AsyncGenerator<Reply, void, undefined>
 }
 
+export declare class RingChannelHandlerHello {
+  /**
+   * Receives the next value, resolving when one is available. Rejects once
+   * the producer is gone (the ring's strong owner has been dropped).
+   */
+  recvAsync(): Promise<Hello>
+  /**
+   * Receives a value without blocking, returning `null` if the ring is
+   * currently empty.
+   */
+  tryRecv(): Hello | null
+  /**
+   * Resolves with the next value once one is available, rejecting once the
+   * producer is gone. zenoh's `recv` is a synchronous blocking call; it is
+   * run on a worker thread so the wait never freezes the JS event loop.
+   */
+  recv(): Promise<Hello>
+  /**
+   * Resolves with the next value, or `null` if `timeoutMs` milliseconds
+   * elapse first. Rejects once the producer is gone. The blocking wait runs
+   * on a worker thread.
+   */
+  recvTimeout(timeoutMs: number): Promise<Hello | null>
+  /**
+   * Resolves with the next value, or `null` once the wall-clock
+   * `deadlineMs` (epoch milliseconds, e.g. from `Date.now()`) passes.
+   * Rejects once the producer is gone. The blocking wait runs on a worker
+   * thread.
+   */
+  recvDeadline(deadlineMs: number): Promise<Hello | null>
+}
+
 export declare class RingChannelHandlerMatchingStatus {
   /**
    * Receives the next value, resolving when one is available. Rejects once
@@ -1105,6 +1207,33 @@ export declare class SampleMissListener {
  */
 export declare class SampleStream {
   [Symbol.asyncIterator](): AsyncGenerator<Sample, void, undefined>
+}
+
+export declare class Scout {
+  /**
+   * Scout for zenoh processes matching `what` (router/peer/client), using
+   * `config` for the multicast settings.
+   *
+   * The `handler` option chooses the channel delivering `Hello` replies
+   * (default: FIFO of [`DEFAULT_CHANNEL_CAPACITY`]). The returned `Scout` keeps
+   * scouting until `stop` is called or it is dropped.
+   */
+  static scout(what: WhatAmIMatcher, config: Config, options?: ScoutOptions | undefined | null): Promise<Scout>
+  /**
+   * The receive end delivering `Hello` replies. A `FifoChannelHandler` or
+   * `RingChannelHandler` depending on the channel chosen at scout time.
+   *
+   * The handler is not iterable; iterate via `scout.handler.stream()`.
+   */
+  get handler(): FifoChannelHandlerHello | RingChannelHandlerHello
+  /**
+   * Stop scouting. Idempotent; a second call is a no-op.
+   *
+   * For a ring scout still referenced by an outstanding handler, this drops our
+   * strong reference and lets the last handler release stop it. Dropping the
+   * `Scout` does the same.
+   */
+  stop(): void
 }
 
 export declare class Selector {
@@ -1635,6 +1764,12 @@ export type SampleKind =  'Put'|
 /** Options for `Subscriber.sampleMissListener` — selects the notification channel. */
 export interface SampleMissListenerOptions {
   /** Channel selection for the listener's handler (default: FIFO). */
+  handler?: ChannelConfig
+}
+
+/** Options for `scout` — mirrors `ScoutBuilder`. */
+export interface ScoutOptions {
+  /** Channel selection for the `Hello` handler (default: FIFO). */
   handler?: ChannelConfig
 }
 

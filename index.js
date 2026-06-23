@@ -18,6 +18,7 @@ import {
   Querier,
   Queryable,
   SampleMissListener,
+  Scout,
   Session,
   Subscriber,
 } from './binding.js'
@@ -58,7 +59,11 @@ Queryable.prototype[Symbol.asyncDispose] = function () {
   return this.undeclare()
 }
 
-// Future entities (Scout) follow the same pattern as they land — async cleanup
-// → `Symbol.asyncDispose`.
+// `Scout` is the lone exception: stopping it cancels a local multicast task with
+// no network round-trip, so its cleanup is synchronous — `Symbol.dispose`
+// (`using`), not `Symbol.asyncDispose` (`await using`).
+Scout.prototype[Symbol.dispose] = function () {
+  return this.stop()
+}
 
 export * from './binding.js'
