@@ -254,6 +254,8 @@ pub struct SampleMissListenerOptions {
 pub struct QueryableOptions {
   pub complete: Option<bool>,
   pub allowed_origin: Option<Locality>,
+  /// Channel selection for the queryable's handler (default: FIFO).
+  pub handler: Option<ChannelConfig>,
 }
 
 /// Options for `Session.declareQuerier` — mirrors `QuerierBuilder`.
@@ -286,12 +288,37 @@ pub struct QuerierGetOptions {
   pub handler: Option<ChannelConfig>,
 }
 
-/// Options for `Query.reply` — mirrors `ReplyBuilder`.
+/// Options for `Query.reply` (a `Put` reply) — mirrors `ReplyBuilder`.
+///
+/// `congestionControl` / `priority` are intentionally absent: zenoh deprecated
+/// them on replies (they are no-ops — a reply inherits the query's QoS, readable
+/// via `Query.congestionControl` / `Query.priority`). `express` still applies.
 #[napi(object, object_to_js = false)]
 pub struct ReplyOptions {
   pub encoding: Option<String>,
-  pub congestion_control: Option<CongestionControl>,
-  pub priority: Option<Priority>,
+  pub express: Option<bool>,
+  #[napi(ts_type = "Timestamp")]
+  pub timestamp: Option<TimestampArg>,
+  pub attachment: Option<Uint8Array>,
+  #[napi(ts_type = "SourceInfo")]
+  pub source_info: Option<SourceInfoArg>,
+}
+
+/// Options for `Query.replyErr` — mirrors `ReplyErrBuilder`.
+///
+/// An error reply carries only a payload and its encoding; it has no key
+/// expression or QoS of its own (the reply inherits the query's QoS).
+#[napi(object, object_to_js = false)]
+pub struct ReplyErrOptions {
+  pub encoding: Option<String>,
+}
+
+/// Options for `Query.replyDel` (a `Delete` reply) — mirrors `ReplyBuilder`.
+///
+/// As a delete, it carries no payload and therefore no encoding; otherwise it
+/// mirrors `ReplyOptions` (and likewise omits the deprecated QoS setters).
+#[napi(object, object_to_js = false)]
+pub struct ReplyDelOptions {
   pub express: Option<bool>,
   #[napi(ts_type = "Timestamp")]
   pub timestamp: Option<TimestampArg>,

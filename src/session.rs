@@ -15,10 +15,12 @@ use crate::handlers::{
 use crate::keyexpr::KeyExprArg;
 use crate::liveliness::Liveliness;
 use crate::options::{
-  GetOptions, PublisherOptions, PutOptions, QuerierOptions, SubscriberOptions, recovery_into_zenoh,
+  GetOptions, PublisherOptions, PutOptions, QuerierOptions, QueryableOptions, SubscriberOptions,
+  recovery_into_zenoh,
 };
 use crate::publisher::Publisher;
 use crate::querier::Querier;
+use crate::queryable::Queryable;
 use crate::selector::SelectorArg;
 use crate::subscriber::Subscriber;
 
@@ -286,6 +288,56 @@ impl Session {
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(Querier::from_inner(querier))
+  }
+
+  /// Declares a queryable on `keyExpr` that answers matching queries.
+  ///
+  /// The `handler` option chooses the channel delivering incoming queries
+  /// (default: FIFO of [`DEFAULT_CHANNEL_CAPACITY`]); `complete` advertises this
+  /// queryable as having the full set of matching data.
+  #[napi]
+  pub async fn declare_queryable(
+    &self,
+    #[napi(ts_arg_type = "string | KeyExpr")] key_expr: KeyExprArg,
+    options: Option<QueryableOptions>,
+  ) -> napi::Result<Queryable> {
+    let session = self.inner.clone();
+    let ke = key_expr.0;
+
+    let handler_cfg = options.as_ref().and_then(|o| o.handler.as_ref());
+    let capacity = handler_cfg
+      .and_then(|c| c.capacity)
+      .map(|c| c as usize)
+      .unwrap_or(DEFAULT_CHANNEL_CAPACITY);
+    let is_ring = handler_cfg.is_some_and(|c| matches!(c.kind, ChannelKind::Ring));
+
+    let mut builder = session.declare_queryable(ke);
+    if let Some(opts) = options {
+      if let Some(complete) = opts.complete {
+        builder = builder.complete(complete);
+      }
+      if let Some(allowed_origin) = opts.allowed_origin {
+        builder = builder.allowed_origin(allowed_origin.into());
+      }
+    }
+
+    if is_ring {
+      let queryable = builder
+        .with(RingChannel::new(capacity))
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      let key_expr = queryable.key_expr().clone();
+      let id = queryable.id();
+      Ok(Queryable::from_ring(queryable, key_expr, id))
+    } else {
+      let queryable = builder
+        .with(FifoChannel::new(capacity))
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+      let key_expr = queryable.key_expr().clone();
+      let id = queryable.id();
+      Ok(Queryable::from_fifo(queryable, key_expr, id))
+    }
   }
 
   /// Sends a one-shot query on `selector` and returns the reply handler. A

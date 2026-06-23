@@ -8,6 +8,7 @@ use napi_derive::napi;
 // stays a bare `Type::Path` and the signature is generated.
 use crate::matching_status::MatchingStatus;
 use crate::miss::Miss;
+use crate::query::Query;
 use crate::reply::Reply;
 use crate::sample::Sample;
 
@@ -451,4 +452,25 @@ ring_channel_handler!(
 impl_ring_source!(
   zenoh::handlers::RingChannelHandler<zenoh::query::Reply>,
   zenoh::query::Reply
+);
+
+// `Query` handler — produced by a `Queryable`. The ring producer is the
+// queryable itself, which `Deref`s to its `RingChannelHandler<Query>`.
+fifo_channel_handler!(
+  FifoChannelHandlerQuery,
+  QueryStream,
+  Query,
+  zenoh::query::Query,
+  Query::from_inner
+);
+
+ring_channel_handler!(
+  RingChannelHandlerQuery,
+  Query,
+  zenoh::query::Query,
+  Query::from_inner
+);
+impl_ring_source!(
+  zenoh::query::Queryable<zenoh::handlers::RingChannelHandler<zenoh::query::Query>>,
+  zenoh::query::Query
 );

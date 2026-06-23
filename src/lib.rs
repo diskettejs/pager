@@ -28,6 +28,7 @@ mod publisher;
 mod qos;
 mod querier;
 mod query;
+mod queryable;
 mod reply;
 mod reply_error;
 mod sample;

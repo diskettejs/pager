@@ -22,6 +22,7 @@ export * from './binding.js';
 import * as bindings from './binding.js';
 import type {
   Config,
+  FifoChannelHandlerQuery,
   FifoChannelHandlerReply,
   FifoChannelHandlerSample,
   GetOptions,
@@ -29,6 +30,8 @@ import type {
   LivelinessGetOptions,
   QuerierGetOptions,
   QuerierOptions,
+  QueryableOptions,
+  RingChannelHandlerQuery,
   RingChannelHandlerReply,
   RingChannelHandlerSample,
   Selector,
@@ -46,6 +49,9 @@ export type SampleHandler = FifoChannelHandlerSample | RingChannelHandlerSample;
 
 /** The reply handler a `get` resolves to, by channel kind. */
 export type ReplyHandler = FifoChannelHandlerReply | RingChannelHandlerReply;
+
+/** The query handler a `Queryable` exposes, by channel kind. */
+export type QueryHandler = FifoChannelHandlerQuery | RingChannelHandlerQuery;
 
 /**
  * Narrows an options bag's `handler` to the default FIFO channel. `handler` stays
@@ -74,6 +80,20 @@ export declare class Subscriber<
   /** The receive end of the subscription, narrowed to the chosen channel. */
   get handler(): H;
   /** Async-disposes by undeclaring the subscription (`await using`). */
+  [Symbol.asyncDispose](): Promise<void>;
+}
+
+/**
+ * A declared queryable whose `handler` (the incoming-query channel) narrows to
+ * the channel chosen at declare time (defaults to the union). Inherits
+ * `keyExpr` / `id` / `undeclare` from the generated `Queryable`.
+ */
+export declare class Queryable<
+  H extends QueryHandler = QueryHandler,
+> extends bindings.Queryable {
+  /** The receive end delivering incoming queries, narrowed to the chosen channel. */
+  get handler(): H;
+  /** Async-disposes by undeclaring the queryable (`await using`). */
   [Symbol.asyncDispose](): Promise<void>;
 }
 
@@ -122,10 +142,10 @@ export declare class Liveliness extends bindings.Liveliness {
 }
 
 /**
- * A session whose `declareSubscriber` / `get` narrow by channel kind and whose
- * `open` / `declareQuerier` / `liveliness` yield these narrowing facades.
- * Inherits `put` / `close` / `declarePublisher` / `zid` / `isClosed` from the
- * generated `Session`.
+ * A session whose `declareSubscriber` / `declareQueryable` / `get` narrow by
+ * channel kind and whose `open` / `declareQuerier` / `liveliness` yield these
+ * narrowing facades. Inherits `put` / `close` / `declarePublisher` / `zid` /
+ * `isClosed` from the generated `Session`.
  *
  * `open` / `declareQuerier` / `liveliness` are overridden only to return the
  * facade types — otherwise a session/querier/liveliness obtained from them would
@@ -154,6 +174,21 @@ export declare class Session extends bindings.Session {
     keyExpr: KeyExprArg,
     options?: QuerierOptions | null,
   ): Promise<Querier>;
+  /** FIFO (default): the query handler has the full receive + introspection + `stream()` surface. */
+  declareQueryable(
+    keyExpr: KeyExprArg,
+    options?: FifoOptions<QueryableOptions> | null,
+  ): Promise<Queryable<FifoChannelHandlerQuery>>;
+  /** Ring: the query handler exposes only the receive variants. */
+  declareQueryable(
+    keyExpr: KeyExprArg,
+    options: RingOptions<QueryableOptions>,
+  ): Promise<Queryable<RingChannelHandlerQuery>>;
+  /** Fallback when the channel `kind` isn't a literal. */
+  declareQueryable(
+    keyExpr: KeyExprArg,
+    options?: QueryableOptions | null,
+  ): Promise<Queryable>;
   /** The liveliness sub-API, scoped to this session. */
   liveliness(): Liveliness;
   /** FIFO (default): the reply handler has the full receive + introspection + `stream()` surface. */

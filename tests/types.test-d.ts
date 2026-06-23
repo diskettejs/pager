@@ -2,10 +2,14 @@ import { describe, expectTypeOf, test } from 'vitest'
 import { KeyExpr, Querier, Selector, Session } from '../index.js'
 import type {
   ChannelKind,
+  FifoChannelHandlerQuery,
   FifoChannelHandlerReply,
   FifoChannelHandlerSample,
   Liveliness,
+  QueryHandler,
+  Queryable,
   ReplyHandler,
+  RingChannelHandlerQuery,
   RingChannelHandlerReply,
   RingChannelHandlerSample,
   SampleHandler,
@@ -111,6 +115,26 @@ describe('Session.declareSubscriber narrows the subscriber by channel kind', () 
   test('SampleHandler is the union of both channel handlers', () => {
     expectTypeOf<SampleHandler>().toEqualTypeOf<
       FifoChannelHandlerSample | RingChannelHandlerSample
+    >()
+  })
+})
+
+describe('Session.declareQueryable narrows the queryable by channel kind', () => {
+  test('no options → FIFO queryable', async () => {
+    const queryable = await session.declareQueryable('key/**')
+    expectTypeOf(queryable).toEqualTypeOf<Queryable<FifoChannelHandlerQuery>>()
+    expectTypeOf(queryable.handler).toEqualTypeOf<FifoChannelHandlerQuery>()
+  })
+
+  test("kind: 'Ring' → Ring queryable", async () => {
+    const queryable = await session.declareQueryable('key/**', { handler: { kind: 'Ring' } })
+    expectTypeOf(queryable).toEqualTypeOf<Queryable<RingChannelHandlerQuery>>()
+    expectTypeOf(queryable.handler).toEqualTypeOf<RingChannelHandlerQuery>()
+  })
+
+  test('QueryHandler is the union of both channel handlers', () => {
+    expectTypeOf<QueryHandler>().toEqualTypeOf<
+      FifoChannelHandlerQuery | RingChannelHandlerQuery
     >()
   })
 })

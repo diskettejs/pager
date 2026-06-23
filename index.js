@@ -16,6 +16,7 @@ import {
   MatchingListener,
   Publisher,
   Querier,
+  Queryable,
   SampleMissListener,
   Session,
   Subscriber,
@@ -53,7 +54,11 @@ Querier.prototype[Symbol.asyncDispose] = function () {
   return this.undeclare()
 }
 
-// Future entities (Queryable / Scout) follow the same pattern as they land —
-// async cleanup → `Symbol.asyncDispose`.
+Queryable.prototype[Symbol.asyncDispose] = function () {
+  return this.undeclare()
+}
+
+// Future entities (Scout) follow the same pattern as they land — async cleanup
+// → `Symbol.asyncDispose`.
 
 export * from './binding.js'

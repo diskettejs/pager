@@ -297,6 +297,66 @@ export declare class FifoChannelHandlerMiss {
   sameChannel(other: FifoChannelHandlerMiss): boolean
 }
 
+export declare class FifoChannelHandlerQuery {
+  /**
+   * Receives the next value, resolving when one is available. Rejects once
+   * the channel is disconnected (the producer has been dropped).
+   */
+  recvAsync(): Promise<Query>
+  /**
+   * Receives a value without blocking, returning `null` if the channel is
+   * currently empty.
+   */
+  tryRecv(): Query | null
+  /**
+   * Resolves with the next value once one is available, rejecting if the
+   * channel disconnects (all senders dropped). Unlike `recvAsync`, zenoh's
+   * `recv` is a synchronous blocking call; it is run on a worker thread so
+   * the wait never freezes the JS event loop.
+   */
+  recv(): Promise<Query>
+  /**
+   * Resolves with the next value, or `null` if `timeoutMs` milliseconds
+   * elapse first. Rejects if the channel disconnects. The blocking wait
+   * runs on a worker thread.
+   */
+  recvTimeout(timeoutMs: number): Promise<Query | null>
+  /**
+   * Resolves with the next value, or `null` once the wall-clock
+   * `deadlineMs` (epoch milliseconds, e.g. from `Date.now()`) passes.
+   * Rejects if the channel disconnects. The blocking wait runs on a worker
+   * thread.
+   */
+  recvDeadline(deadlineMs: number): Promise<Query | null>
+  /**
+   * Takes every value currently queued and returns them as an array,
+   * without blocking. Unlike repeated `tryRecv`, no further values are
+   * fetched from the channel once this snapshot is taken.
+   */
+  drain(): Array<Query>
+  /**
+   * Returns an async-iterator object over the channel, for use with
+   * `for await`. The handler itself is not iterable; iteration lives here.
+   */
+  stream(): QueryStream
+  /** The number of values currently queued. */
+  get len(): number
+  /** The channel's bound, or `null` if unbounded. */
+  get capacity(): number | null
+  /** Whether the channel currently holds no values. */
+  get isEmpty(): boolean
+  /** Whether the channel is currently at capacity. */
+  get isFull(): boolean
+  /** The number of senders feeding this channel. */
+  get senderCount(): number
+  /** The number of receivers sharing this channel. */
+  get receiverCount(): number
+  /** Whether the channel has been disconnected (all senders dropped). */
+  get isDisconnected(): boolean
+  /** Whether `other` is a handle to the same underlying channel. */
+  sameChannel(other: FifoChannelHandlerQuery): boolean
+}
+
 export declare class FifoChannelHandlerReply {
   /**
    * Receives the next value, resolving when one is available. Rejects once
@@ -733,6 +793,92 @@ export declare class Querier {
   undeclare(): Promise<void>
 }
 
+/**
+ * A query received by a `Queryable` — a request this session is expected to
+ * answer by sending zero or more replies.
+ *
+ * Reply with `reply` (a `Put` sample), `replyErr` (an error), or `replyDel` (a
+ * `Delete` sample). A query may be answered any number of times. When the
+ * `Query` is dropped without further replies, zenoh finalizes it; nothing here
+ * needs to be called to "close" it.
+ */
+export declare class Query {
+  /** The full selector (key expression + parameters) of this query. */
+  get selector(): Selector
+  /** The key expression part of this query's selector. */
+  get keyExpr(): KeyExpr
+  /** The parameters part of this query's selector. */
+  get parameters(): Parameters
+  /** This query's payload, or `null` if it carries none. */
+  get payload(): Bytes | null
+  /** The encoding of this query's payload, or `null` if it carries no payload. */
+  get encoding(): Encoding | null
+  /** This query's attachment, or `null` if it carries none. */
+  get attachment(): Bytes | null
+  /** The source info of this query, or `null` if absent. */
+  get sourceInfo(): SourceInfo | null
+  /** Whether this query accepts replies whose key expression doesn't match it. */
+  get acceptReplies(): ReplyKeyExpr
+  /** The priority the reply will be sent with (the query's own priority). */
+  get priority(): Priority
+  /** The congestion control the reply will be routed with. */
+  get congestionControl(): CongestionControl
+  /** Whether the reply is sent express (not batched). */
+  get express(): boolean
+  /**
+   * Replies to this query with a `Put` sample on `keyExpr`.
+   *
+   * By default a query only accepts replies whose key expression intersects
+   * its own (see `acceptReplies`).
+   */
+  reply(keyExpr: string | KeyExpr, payload: string | Uint8Array, options?: ReplyOptions | undefined | null): Promise<void>
+  /**
+   * Replies to this query with an error payload.
+   *
+   * The error reply is sent with the QoS of the query.
+   */
+  replyErr(payload: string | Uint8Array, options?: ReplyErrOptions | undefined | null): Promise<void>
+  /**
+   * Replies to this query with a `Delete` sample on `keyExpr`.
+   *
+   * The reply is sent with the QoS of the query.
+   */
+  replyDel(keyExpr: string | KeyExpr, options?: ReplyDelOptions | undefined | null): Promise<void>
+}
+
+export declare class Queryable {
+  /** The key expression this queryable answers queries on. */
+  get keyExpr(): KeyExpr
+  /** The global id of this queryable entity. */
+  get id(): EntityGlobalId
+  /**
+   * The receive end delivering incoming queries. A `FifoChannelHandler` or
+   * `RingChannelHandler` depending on the channel chosen at declare time.
+   *
+   * The handler is not iterable; iterate via `queryable.handler.stream()`.
+   */
+  get handler(): FifoChannelHandlerQuery | RingChannelHandlerQuery
+  /**
+   * Undeclare this queryable. Resolves once undeclaration completes; a second
+   * call is a no-op.
+   *
+   * For a ring queryable still referenced by an outstanding handler, this
+   * drops our strong reference and lets the background drop undeclare it once
+   * the last handler is released.
+   */
+  undeclare(): Promise<void>
+}
+
+/**
+ * This type implements JavaScript's async iterable protocol.
+ * It can be used with `for await...of` loops.
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_async_iterator_and_async_iterable_protocols
+ */
+export declare class QueryStream {
+  [Symbol.asyncIterator](): AsyncGenerator<Query, void, undefined>
+}
+
 export declare class Reply {
   result(): Sample | ReplyError
   get replierId(): EntityGlobalId | null
@@ -815,6 +961,38 @@ export declare class RingChannelHandlerMiss {
    * thread.
    */
   recvDeadline(deadlineMs: number): Promise<Miss | null>
+}
+
+export declare class RingChannelHandlerQuery {
+  /**
+   * Receives the next value, resolving when one is available. Rejects once
+   * the producer is gone (the ring's strong owner has been dropped).
+   */
+  recvAsync(): Promise<Query>
+  /**
+   * Receives a value without blocking, returning `null` if the ring is
+   * currently empty.
+   */
+  tryRecv(): Query | null
+  /**
+   * Resolves with the next value once one is available, rejecting once the
+   * producer is gone. zenoh's `recv` is a synchronous blocking call; it is
+   * run on a worker thread so the wait never freezes the JS event loop.
+   */
+  recv(): Promise<Query>
+  /**
+   * Resolves with the next value, or `null` if `timeoutMs` milliseconds
+   * elapse first. Rejects once the producer is gone. The blocking wait runs
+   * on a worker thread.
+   */
+  recvTimeout(timeoutMs: number): Promise<Query | null>
+  /**
+   * Resolves with the next value, or `null` once the wall-clock
+   * `deadlineMs` (epoch milliseconds, e.g. from `Date.now()`) passes.
+   * Rejects once the producer is gone. The blocking wait runs on a worker
+   * thread.
+   */
+  recvDeadline(deadlineMs: number): Promise<Query | null>
 }
 
 export declare class RingChannelHandlerReply {
@@ -1029,6 +1207,14 @@ export declare class Session {
   declarePublisher(keyExpr: string | KeyExpr, options?: PublisherOptions | undefined | null): Promise<Publisher>
   /** Declares a querier on `keyExpr`, fixing its config for every `get`. */
   declareQuerier(keyExpr: string | KeyExpr, options?: QuerierOptions | undefined | null): Promise<Querier>
+  /**
+   * Declares a queryable on `keyExpr` that answers matching queries.
+   *
+   * The `handler` option chooses the channel delivering incoming queries
+   * (default: FIFO of [`DEFAULT_CHANNEL_CAPACITY`]); `complete` advertises this
+   * queryable as having the full set of matching data.
+   */
+  declareQueryable(keyExpr: string | KeyExpr, options?: QueryableOptions | undefined | null): Promise<Queryable>
   /**
    * Sends a one-shot query on `selector` and returns the reply handler. A
    * `FifoChannelHandler` or `RingChannelHandler` depending on the channel
@@ -1374,6 +1560,8 @@ export interface QuerierOptions {
 export interface QueryableOptions {
   complete?: boolean
   allowedOrigin?: Locality
+  /** Channel selection for the queryable's handler (default: FIFO). */
+  handler?: ChannelConfig
 }
 
 /** The kind of queryables that should be targeted by a query. */
@@ -1397,17 +1585,44 @@ export interface RepliesConfig {
   express?: boolean
 }
 
+/**
+ * Options for `Query.replyDel` (a `Delete` reply) — mirrors `ReplyBuilder`.
+ *
+ * As a delete, it carries no payload and therefore no encoding; otherwise it
+ * mirrors `ReplyOptions` (and likewise omits the deprecated QoS setters).
+ */
+export interface ReplyDelOptions {
+  express?: boolean
+  timestamp?: Timestamp
+  attachment?: Uint8Array
+  sourceInfo?: SourceInfo
+}
+
+/**
+ * Options for `Query.replyErr` — mirrors `ReplyErrBuilder`.
+ *
+ * An error reply carries only a payload and its encoding; it has no key
+ * expression or QoS of its own (the reply inherits the query's QoS).
+ */
+export interface ReplyErrOptions {
+  encoding?: string
+}
+
 /** Whether replies whose key expression doesn't match the query are accepted. */
 export type ReplyKeyExpr = /** Accept replies whose key expressions may not match the query. */
 'Any'|
 /** Accept only replies whose key expressions match the query. */
 'MatchingQuery';
 
-/** Options for `Query.reply` — mirrors `ReplyBuilder`. */
+/**
+ * Options for `Query.reply` (a `Put` reply) — mirrors `ReplyBuilder`.
+ *
+ * `congestionControl` / `priority` are intentionally absent: zenoh deprecated
+ * them on replies (they are no-ops — a reply inherits the query's QoS, readable
+ * via `Query.congestionControl` / `Query.priority`). `express` still applies.
+ */
 export interface ReplyOptions {
   encoding?: string
-  congestionControl?: CongestionControl
-  priority?: Priority
   express?: boolean
   timestamp?: Timestamp
   attachment?: Uint8Array
