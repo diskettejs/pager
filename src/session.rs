@@ -9,20 +9,22 @@ use zenoh::query::ConsolidationMode as ZConsolidationMode;
 use zenoh_ext::{AdvancedPublisherBuilderExt, AdvancedSubscriberBuilderExt};
 
 use crate::config::Config;
+use crate::entity_global_id::EntityGlobalId;
 use crate::handlers::{
   ChannelKind, DEFAULT_CHANNEL_CAPACITY, FifoChannelHandlerReply, RingChannelHandlerReply,
 };
-use crate::keyexpr::KeyExprArg;
+use crate::keyexpr::{KeyExpr, KeyExprArg};
 use crate::liveliness::Liveliness;
 use crate::options::{
-  GetOptions, PublisherOptions, PutOptions, QuerierOptions, QueryableOptions, SubscriberOptions,
-  recovery_into_zenoh,
+  DeleteOptions, GetOptions, PublisherOptions, PutOptions, QuerierOptions, QueryableOptions,
+  SubscriberOptions, recovery_into_zenoh,
 };
 use crate::publisher::Publisher;
 use crate::querier::Querier;
 use crate::queryable::Queryable;
 use crate::selector::SelectorArg;
 use crate::subscriber::Subscriber;
+use crate::time::Timestamp;
 
 #[napi]
 pub struct Session {
@@ -54,10 +56,23 @@ impl Session {
     self.inner.zid().to_string()
   }
 
+  /// The global id of this session entity.
+  #[napi(getter)]
+  pub fn id(&self) -> EntityGlobalId {
+    EntityGlobalId::from_inner(self.inner.id())
+  }
+
   /// Whether the session has been closed.
   #[napi(getter)]
   pub fn is_closed(&self) -> bool {
     self.inner.is_closed()
+  }
+
+  /// Mints a new timestamp from the session's clock, stamped with this
+  /// session's Zenoh id. A fresh value is produced on each call.
+  #[napi]
+  pub fn new_timestamp(&self) -> Timestamp {
+    Timestamp::from_inner(self.inner.new_timestamp())
   }
 
   /// The liveliness sub-API for this session (tokens, subscribers, get).
@@ -125,6 +140,70 @@ impl Session {
     builder
       .await
       .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  /// Deletes the data matching `keyExpr` (publishes a `Delete` sample).
+  ///
+  /// A shortcut for declaring a publisher and calling `delete` on it.
+  #[napi]
+  pub async fn delete(
+    &self,
+    #[napi(ts_arg_type = "string | KeyExpr")] key_expr: KeyExprArg,
+    options: Option<DeleteOptions>,
+  ) -> napi::Result<()> {
+    let session = self.inner.clone();
+    let ke = key_expr.0;
+
+    let mut builder = session.delete(ke);
+    if let Some(opts) = options {
+      if let Some(congestion_control) = opts.congestion_control {
+        builder = builder.congestion_control(congestion_control.into());
+      }
+      if let Some(priority) = opts.priority {
+        builder = builder.priority(priority.into());
+      }
+      if let Some(express) = opts.express {
+        builder = builder.express(express);
+      }
+      if let Some(reliability) = opts.reliability {
+        builder = builder.reliability(reliability.into());
+      }
+      if let Some(allowed_destination) = opts.allowed_destination {
+        builder = builder.allowed_destination(allowed_destination.into());
+      }
+      if let Some(timestamp) = opts.timestamp {
+        builder = builder.timestamp(timestamp.0);
+      }
+      if let Some(attachment) = opts.attachment {
+        builder = builder.attachment(attachment.to_vec());
+      }
+      if let Some(source_info) = opts.source_info {
+        builder = builder.source_info(source_info.0);
+      }
+    }
+
+    builder
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  /// Declares `keyExpr` on the session, returning an optimized handle to it.
+  ///
+  /// Declaring a key expression lets zenoh assign it a numeric id for this
+  /// session, cutting wire overhead when the same key expression is used
+  /// repeatedly (e.g. across many `put`s). The returned `KeyExpr` is used like
+  /// any other but carries that optimization.
+  #[napi]
+  pub async fn declare_keyexpr(
+    &self,
+    #[napi(ts_arg_type = "string | KeyExpr")] key_expr: KeyExprArg,
+  ) -> napi::Result<KeyExpr> {
+    let session = self.inner.clone();
+    let declared = session
+      .declare_keyexpr(key_expr.0)
+      .await
+      .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(KeyExpr::from_inner(declared))
   }
 
   /// Declares a subscription on `keyExpr`.

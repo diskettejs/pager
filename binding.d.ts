@@ -1310,14 +1310,36 @@ export declare class Session {
   static open(config: Config): Promise<Session>
   /** This session's Zenoh id, as a hex string. */
   get zid(): string
+  /** The global id of this session entity. */
+  get id(): EntityGlobalId
   /** Whether the session has been closed. */
   get isClosed(): boolean
+  /**
+   * Mints a new timestamp from the session's clock, stamped with this
+   * session's Zenoh id. A fresh value is produced on each call.
+   */
+  newTimestamp(): Timestamp
   /** The liveliness sub-API for this session (tokens, subscribers, get). */
   liveliness(): Liveliness
   /** Closes the session, undeclaring everything declared on it. */
   close(): Promise<void>
   /** Publishes `payload` on `keyExpr`. */
   put(keyExpr: string | KeyExpr, payload: string | Uint8Array, options?: PutOptions | undefined | null): Promise<void>
+  /**
+   * Deletes the data matching `keyExpr` (publishes a `Delete` sample).
+   *
+   * A shortcut for declaring a publisher and calling `delete` on it.
+   */
+  delete(keyExpr: string | KeyExpr, options?: DeleteOptions | undefined | null): Promise<void>
+  /**
+   * Declares `keyExpr` on the session, returning an optimized handle to it.
+   *
+   * Declaring a key expression lets zenoh assign it a numeric id for this
+   * session, cutting wire overhead when the same key expression is used
+   * repeatedly (e.g. across many `put`s). The returned `KeyExpr` is used like
+   * any other but carries that optimization.
+   */
+  declareKeyexpr(keyExpr: string | KeyExpr): Promise<KeyExpr>
   /**
    * Declares a subscription on `keyExpr`.
    *
