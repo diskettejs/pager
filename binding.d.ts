@@ -373,6 +373,16 @@ export declare class Liveliness {
    * tokens on declaration.
    */
   declareSubscriber(keyExpr: string | KeyExpr, options?: LivelinessSubscriberOptions | undefined | null): Promise<LivelinessSubscriber>
+  /**
+   * Queries liveliness tokens matching `keyExpr` and returns the reply handler.
+   * A `FifoChannelHandler` or `RingChannelHandler` depending on the channel
+   * chosen via the `handler` option (default: FIFO of
+   * [`DEFAULT_CHANNEL_CAPACITY`]).
+   *
+   * Each reply's `Put` sample carries the key expression of a currently-alive
+   * token. The handler completes (disconnects) once the query is resolved.
+   */
+  get(keyExpr: string | KeyExpr, options?: LivelinessGetOptions | undefined | null): Promise<FifoChannelHandlerReply | RingChannelHandlerReply>
 }
 
 /**
@@ -1043,6 +1053,8 @@ export interface LivelinessGetOptions {
   /** Timeout in milliseconds. */
   timeout?: number
   cancellationToken?: CancellationToken
+  /** Channel selection for the reply handler (default: FIFO). */
+  handler?: ChannelConfig
 }
 
 /** Options for `Liveliness.declareSubscriber` — mirrors `LivelinessSubscriberBuilder`. */

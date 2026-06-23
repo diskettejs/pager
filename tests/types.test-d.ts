@@ -1,6 +1,7 @@
 import { describe, expectTypeOf, test } from 'vitest'
 import { Querier, Session } from '../index.js'
 import type {
+  ChannelKind,
   FifoChannelHandlerReply,
   FifoChannelHandlerSample,
   Liveliness,
@@ -41,8 +42,35 @@ describe('Querier.get narrows the reply handler by channel kind', () => {
   })
 
   test('non-literal kind → union fallback', async () => {
-    const kind = 'Ring' as 'Fifo' | 'Ring'
+    const kind = 'Ring' as ChannelKind
     expectTypeOf(await querier.get({ handler: { kind } })).toEqualTypeOf<ReplyHandler>()
+  })
+})
+
+describe('Liveliness.get narrows the reply handler by channel kind', () => {
+  const liveliness = session.liveliness()
+
+  test('no options → FIFO handler (the default)', async () => {
+    expectTypeOf(await liveliness.get('key/**')).toEqualTypeOf<FifoChannelHandlerReply>()
+  })
+
+  test("kind: 'Fifo' → FIFO handler with the full surface", async () => {
+    const replies = await liveliness.get('key/**', { handler: { kind: 'Fifo', capacity: 10 } })
+    expectTypeOf(replies).toEqualTypeOf<FifoChannelHandlerReply>()
+    expectTypeOf(replies.stream).toBeFunction()
+    expectTypeOf(replies).toHaveProperty('isEmpty')
+  })
+
+  test("kind: 'Ring' → Ring handler, receive-only", async () => {
+    const replies = await liveliness.get('key/**', { handler: { kind: 'Ring', capacity: 10 } })
+    expectTypeOf(replies).toEqualTypeOf<RingChannelHandlerReply>()
+    expectTypeOf(replies).not.toHaveProperty('stream')
+    expectTypeOf(replies.recvAsync).toBeFunction()
+  })
+
+  test('non-literal kind → union fallback', async () => {
+    const kind = 'Ring' as ChannelKind
+    expectTypeOf(await liveliness.get('key/**', { handler: { kind } })).toEqualTypeOf<ReplyHandler>()
   })
 })
 

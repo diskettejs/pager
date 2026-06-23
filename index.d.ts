@@ -25,6 +25,7 @@ import type {
   FifoChannelHandlerReply,
   FifoChannelHandlerSample,
   KeyExpr,
+  LivelinessGetOptions,
   QuerierGetOptions,
   QuerierOptions,
   RingChannelHandlerReply,
@@ -54,6 +55,14 @@ type FifoQuerierGetOptions = Omit<QuerierGetOptions, 'handler'> & {
 };
 
 type RingQuerierGetOptions = Omit<QuerierGetOptions, 'handler'> & {
+  handler: { kind: 'Ring'; capacity?: number };
+};
+
+type FifoLivelinessGetOptions = Omit<LivelinessGetOptions, 'handler'> & {
+  handler?: { kind: 'Fifo'; capacity?: number };
+};
+
+type RingLivelinessGetOptions = Omit<LivelinessGetOptions, 'handler'> & {
   handler: { kind: 'Ring'; capacity?: number };
 };
 
@@ -89,14 +98,41 @@ export declare class Querier extends bindings.Querier {
 }
 
 /**
+ * The liveliness sub-API of a `Session`, reached via `Session.liveliness()`.
+ * Its `get` narrows the reply handler to the channel chosen via the `handler`
+ * option (mirroring `Querier.get`, where `replies` is the handler). Inherits
+ * `declareToken` / `declareSubscriber` from the generated `Liveliness`.
+ *
+ * Unlike the declared entities, `Liveliness` is a borrow-free handle over the
+ * session, so it has no `undeclare` / `[Symbol.asyncDispose]`.
+ */
+export declare class Liveliness extends bindings.Liveliness {
+  /** FIFO (default): the reply handler has the full receive + introspection + `stream()` surface. */
+  get(
+    keyExpr: KeyExprArg,
+    options?: FifoLivelinessGetOptions | null,
+  ): Promise<FifoChannelHandlerReply>;
+  /** Ring: the reply handler exposes only the receive variants. */
+  get(
+    keyExpr: KeyExprArg,
+    options: RingLivelinessGetOptions,
+  ): Promise<RingChannelHandlerReply>;
+  /** Fallback when the channel `kind` isn't a literal. */
+  get(
+    keyExpr: KeyExprArg,
+    options?: LivelinessGetOptions | null,
+  ): Promise<ReplyHandler>;
+}
+
+/**
  * A session whose `declareSubscriber` narrows the subscriber by channel kind and
- * whose `open` / `declareQuerier` yield these narrowing facades. Inherits `put` /
- * `close` / `declarePublisher` / `liveliness` / `zid` / `isClosed` from the
+ * whose `open` / `declareQuerier` / `liveliness` yield these narrowing facades.
+ * Inherits `put` / `close` / `declarePublisher` / `zid` / `isClosed` from the
  * generated `Session`.
  *
- * `open` and `declareQuerier` are overridden only to return the facade types —
- * otherwise a session/querier obtained from them would be the un-narrowed
- * generated class.
+ * `open` / `declareQuerier` / `liveliness` are overridden only to return the
+ * facade types — otherwise a session/querier/liveliness obtained from them would
+ * be the un-narrowed generated class.
  */
 export declare class Session extends bindings.Session {
   /** Opens a session with the given configuration. */
@@ -121,6 +157,8 @@ export declare class Session extends bindings.Session {
     keyExpr: KeyExprArg,
     options?: QuerierOptions | null,
   ): Promise<Querier>;
+  /** The liveliness sub-API, scoped to this session. */
+  liveliness(): Liveliness;
   /** Async-disposes by closing the session (`await using`). */
   [Symbol.asyncDispose](): Promise<void>;
 }
