@@ -6,6 +6,8 @@ use napi_derive::napi;
 // the `AsyncGenerator::Yield` type (the `[Symbol.asyncIterator]` TS signature is
 // then dropped). An `:ident` is not group-wrapped, so `type Yield = Sample;`
 // stays a bare `Type::Path` and the signature is generated.
+use crate::matching_status::MatchingStatus;
+use crate::miss::Miss;
 use crate::sample::Sample;
 
 /// Which channel backs a subscription's handler.
@@ -170,8 +172,15 @@ macro_rules! fifo_channel_handler {
 ///
 /// The ring handler is sparse (receive variants only — no `stream`, no
 /// introspection) and, because `RingChannelHandler` is not `Clone`, holds an
-/// `Arc<$producer>` (the live subscription) and reaches the handler via
-/// `.handler()`.
+/// `Arc<$producer>` (the live producer keeping the ring's `Weak` upgradable).
+///
+/// The channel handler is reached by **auto-deref**, not `producer.handler()`:
+/// every producer that owns a ring handler (`AdvancedSubscriber`,
+/// `MatchingListener`, `SampleMissListener`) `Deref`s to its handler, but only
+/// the first two expose an inherent `.handler()`. `SampleMissListener` exposes
+/// the handler through `Deref` alone, so `sub.recv_async()` / `sub.try_recv()`
+/// (which resolve through `Arc -> $producer -> RingChannelHandler`) is the one
+/// form that works for all three.
 ///
 /// - `$name`     — the handler class name (e.g. `RingChannelHandlerSample`)
 /// - `$producer` — the entity owning the handler (e.g. `AdvancedSubscriber<RingChannelHandler<Sample>>`)
@@ -196,11 +205,11 @@ macro_rules! ring_channel_handler {
       /// the subscription is gone (the ring's strong owner has been dropped).
       #[napi]
       pub async fn recv_async(&self) -> napi::Result<$napi> {
-        // Clone the `Arc` so the future owns a strong ref to the subscription
+        // Clone the `Arc` so the future owns a strong ref to the producer
         // (keeping the ring alive) without borrowing `&self` across the await.
+        // `recv_async` resolves through `Arc -> $producer -> RingChannelHandler`.
         let sub = std::sync::Arc::clone(&self.sub);
         let value = sub
-          .handler()
           .recv_async()
           .await
           .map_err(|e| napi::Error::from_reason(e.to_string()))?;
@@ -213,7 +222,6 @@ macro_rules! ring_channel_handler {
       pub fn try_recv(&self) -> napi::Result<Option<$napi>> {
         self
           .sub
-          .handler()
           .try_recv()
           .map(|opt| opt.map($wrap))
           .map_err(|e| napi::Error::from_reason(e.to_string()))
@@ -235,4 +243,36 @@ ring_channel_handler!(
   zenoh_ext::AdvancedSubscriber<zenoh::handlers::RingChannelHandler<zenoh::sample::Sample>>,
   Sample,
   Sample::new
+);
+
+fifo_channel_handler!(
+  FifoChannelHandlerMatchingStatus,
+  MatchingStatusStream,
+  MatchingStatus,
+  zenoh::matching::MatchingStatus,
+  MatchingStatus::from_inner
+);
+
+ring_channel_handler!(
+  RingChannelHandlerMatchingStatus,
+  zenoh::matching::MatchingListener<
+    zenoh::handlers::RingChannelHandler<zenoh::matching::MatchingStatus>,
+  >,
+  MatchingStatus,
+  MatchingStatus::from_inner
+);
+
+fifo_channel_handler!(
+  FifoChannelHandlerMiss,
+  MissStream,
+  Miss,
+  zenoh_ext::Miss,
+  Miss::from_inner
+);
+
+ring_channel_handler!(
+  RingChannelHandlerMiss,
+  zenoh_ext::SampleMissListener<zenoh::handlers::RingChannelHandler<zenoh_ext::Miss>>,
+  Miss,
+  Miss::from_inner
 );

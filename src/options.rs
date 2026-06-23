@@ -147,6 +147,20 @@ pub struct SubscriberOptions {
   pub query_timeout_ms: Option<f64>,
 }
 
+/// Options for `Publisher.matchingListener` — selects the notification channel.
+#[napi(object, object_to_js = false)]
+pub struct MatchingListenerOptions {
+  /// Channel selection for the listener's handler (default: FIFO).
+  pub handler: Option<ChannelConfig>,
+}
+
+/// Options for `Subscriber.sampleMissListener` — selects the notification channel.
+#[napi(object, object_to_js = false)]
+pub struct SampleMissListenerOptions {
+  /// Channel selection for the listener's handler (default: FIFO).
+  pub handler: Option<ChannelConfig>,
+}
+
 /// Options for `Session.declareQueryable` — mirrors `QueryableBuilder`.
 #[napi(object, object_to_js = false)]
 pub struct QueryableOptions {

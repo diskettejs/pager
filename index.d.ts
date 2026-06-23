@@ -101,18 +101,27 @@ export declare class Session {
   [Symbol.asyncDispose](): Promise<void>;
 }
 
-// `Publisher` needs no generic narrowing (it has no handler), so rather than a
-// shadowing facade class it keeps its generated type and gains only the dispose
-// member, merged in by augmenting the binding module's class.
+// `Publisher`, `MatchingListener`, and `SampleMissListener` need no generic
+// narrowing here (their handler unions are left as generated), so rather than
+// shadowing facade classes they keep their generated types and gain only the
+// dispose member, merged in by augmenting the binding module's classes.
 declare module './binding.js' {
   interface Publisher {
     /** Async-disposes by undeclaring the publisher (`await using`). */
     [Symbol.asyncDispose](): Promise<void>;
   }
+  interface MatchingListener {
+    /** Async-disposes by undeclaring the matching listener (`await using`). */
+    [Symbol.asyncDispose](): Promise<void>;
+  }
+  interface SampleMissListener {
+    /** Async-disposes by undeclaring the sample-miss listener (`await using`). */
+    [Symbol.asyncDispose](): Promise<void>;
+  }
 }
 
-// Future entities (Queryable / Querier / MatchingListener / SampleMissListener /
-// LivelinessToken / Scout) get `[Symbol.asyncDispose]` the same way as they
-// land: declare it on the entity (a facade class here, or via
-// `declare module './binding.js'` augmentation for non-shadowed types like
-// `Publisher` above) and patch the prototype in `index.js`.
+// Future entities (Queryable / Querier / LivelinessToken / Scout) get
+// `[Symbol.asyncDispose]` the same way as they land: declare it on the entity
+// (a facade class here, or via `declare module './binding.js'` augmentation for
+// non-shadowed types like `Publisher` above) and patch the prototype in
+// `index.js`.

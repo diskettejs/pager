@@ -590,7 +590,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { Bytes, CancellationToken, Config, Deserializer, Encoding, EndPoint, EntityGlobalId, FifoChannelHandlerSample, Hello, KeyExpr, LivelinessToken, Locator, MatchingStatus, Metadata, Parameters, Publisher, Reply, ReplyError, RingChannelHandlerSample, Sample, SampleStream, Selector, Serializer, Session, SourceInfo, Subscriber, TimeRange, Timestamp, WhatAmIMatcher, ChannelKind, CongestionControl, ConsolidationMode, Locality, Priority, QueryTarget, Reliability, ReplyKeyExpr, SampleKind, WhatAmI } = nativeBinding
+const { Bytes, CancellationToken, Config, Deserializer, Encoding, EndPoint, EntityGlobalId, FifoChannelHandlerMatchingStatus, FifoChannelHandlerMiss, FifoChannelHandlerSample, Hello, KeyExpr, LivelinessToken, Locator, MatchingListener, MatchingStatus, MatchingStatusStream, Metadata, Miss, MissStream, Parameters, Publisher, Reply, ReplyError, RingChannelHandlerMatchingStatus, RingChannelHandlerMiss, RingChannelHandlerSample, Sample, SampleMissListener, SampleStream, Selector, Serializer, Session, SourceInfo, Subscriber, TimeRange, Timestamp, WhatAmIMatcher, ChannelKind, CongestionControl, ConsolidationMode, Locality, Priority, QueryTarget, Reliability, ReplyKeyExpr, SampleKind, WhatAmI } = nativeBinding
 export { Bytes }
 export { CancellationToken }
 export { Config }
@@ -598,19 +598,28 @@ export { Deserializer }
 export { Encoding }
 export { EndPoint }
 export { EntityGlobalId }
+export { FifoChannelHandlerMatchingStatus }
+export { FifoChannelHandlerMiss }
 export { FifoChannelHandlerSample }
 export { Hello }
 export { KeyExpr }
 export { LivelinessToken }
 export { Locator }
+export { MatchingListener }
 export { MatchingStatus }
+export { MatchingStatusStream }
 export { Metadata }
+export { Miss }
+export { MissStream }
 export { Parameters }
 export { Publisher }
 export { Reply }
 export { ReplyError }
+export { RingChannelHandlerMatchingStatus }
+export { RingChannelHandlerMiss }
 export { RingChannelHandlerSample }
 export { Sample }
+export { SampleMissListener }
 export { SampleStream }
 export { Selector }
 export { Serializer }

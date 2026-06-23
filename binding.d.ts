@@ -177,6 +177,74 @@ export declare class EntityGlobalId {
   get eid(): number
 }
 
+export declare class FifoChannelHandlerMatchingStatus {
+  /**
+   * Receives the next value, resolving when one is available. Rejects once
+   * the channel is disconnected (the producer has been dropped).
+   */
+  recvAsync(): Promise<MatchingStatus>
+  /**
+   * Receives a value without blocking, returning `null` if the channel is
+   * currently empty.
+   */
+  tryRecv(): MatchingStatus | null
+  /**
+   * Returns an async-iterator object over the channel, for use with
+   * `for await`. The handler itself is not iterable; iteration lives here.
+   */
+  stream(): MatchingStatusStream
+  /** The number of values currently queued. */
+  get len(): number
+  /** The channel's bound, or `null` if unbounded. */
+  get capacity(): number | null
+  /** Whether the channel currently holds no values. */
+  get isEmpty(): boolean
+  /** Whether the channel is currently at capacity. */
+  get isFull(): boolean
+  /** The number of senders feeding this channel. */
+  get senderCount(): number
+  /** The number of receivers sharing this channel. */
+  get receiverCount(): number
+  /** Whether the channel has been disconnected (all senders dropped). */
+  get isDisconnected(): boolean
+  /** Whether `other` is a handle to the same underlying channel. */
+  sameChannel(other: FifoChannelHandlerMatchingStatus): boolean
+}
+
+export declare class FifoChannelHandlerMiss {
+  /**
+   * Receives the next value, resolving when one is available. Rejects once
+   * the channel is disconnected (the producer has been dropped).
+   */
+  recvAsync(): Promise<Miss>
+  /**
+   * Receives a value without blocking, returning `null` if the channel is
+   * currently empty.
+   */
+  tryRecv(): Miss | null
+  /**
+   * Returns an async-iterator object over the channel, for use with
+   * `for await`. The handler itself is not iterable; iteration lives here.
+   */
+  stream(): MissStream
+  /** The number of values currently queued. */
+  get len(): number
+  /** The channel's bound, or `null` if unbounded. */
+  get capacity(): number | null
+  /** Whether the channel currently holds no values. */
+  get isEmpty(): boolean
+  /** Whether the channel is currently at capacity. */
+  get isFull(): boolean
+  /** The number of senders feeding this channel. */
+  get senderCount(): number
+  /** The number of receivers sharing this channel. */
+  get receiverCount(): number
+  /** Whether the channel has been disconnected (all senders dropped). */
+  get isDisconnected(): boolean
+  /** Whether `other` is a handle to the same underlying channel. */
+  sameChannel(other: FifoChannelHandlerMiss): boolean
+}
+
 export declare class FifoChannelHandlerSample {
   /**
    * Receives the next value, resolving when one is available. Rejects once
@@ -284,8 +352,42 @@ export declare class Locator {
   toEndpoint(): EndPoint
 }
 
+/**
+ * A listener that notifies whenever the matching status of its
+ * `Publisher`/`Querier` changes (whether matching entities exist). Declared
+ * via `Publisher.matchingListener`.
+ */
+export declare class MatchingListener {
+  /**
+   * The receive end of the listener. A `FifoChannelHandler` or
+   * `RingChannelHandler` depending on the channel chosen at declare time.
+   *
+   * The handler is not iterable; iterate via `listener.handler.stream()`.
+   */
+  get handler(): FifoChannelHandlerMatchingStatus | RingChannelHandlerMatchingStatus
+  /**
+   * Undeclare this matching listener. Resolves once undeclaration completes; a
+   * second call is a no-op.
+   *
+   * For a ring listener still referenced by an outstanding handler, this drops
+   * our strong reference and lets the background drop undeclare it once the
+   * last handler is released.
+   */
+  undeclare(): Promise<void>
+}
+
 export declare class MatchingStatus {
   get matching(): boolean
+}
+
+/**
+ * This type implements JavaScript's async iterable protocol.
+ * It can be used with `for await...of` loops.
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_async_iterator_and_async_iterable_protocols
+ */
+export declare class MatchingStatusStream {
+  [Symbol.asyncIterator](): AsyncGenerator<MatchingStatus, void, undefined>
 }
 
 export declare class Metadata {
@@ -305,6 +407,28 @@ export declare class Metadata {
   get(key: string): string | null
   /** Returns every value associated with `key`. */
   values(key: string): Array<string>
+}
+
+/**
+ * A missed-samples notification, produced by a [`SampleMissListener`]. Sample
+ * miss detection requires the matching publisher to enable
+ * `sampleMissDetection`.
+ */
+export declare class Miss {
+  /** The source of the missed samples. */
+  get source(): EntityGlobalId
+  /** The number of missed samples. */
+  get nb(): number
+}
+
+/**
+ * This type implements JavaScript's async iterable protocol.
+ * It can be used with `for await...of` loops.
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_async_iterator_and_async_iterable_protocols
+ */
+export declare class MissStream {
+  [Symbol.asyncIterator](): AsyncGenerator<Miss, void, undefined>
 }
 
 export declare class Parameters {
@@ -355,6 +479,19 @@ export declare class Publisher {
   /** Publishes a delete on this publisher's key expression. */
   delete(options?: PublisherDeleteOptions | undefined | null): Promise<void>
   /**
+   * The current matching status of this publisher — whether any subscribers
+   * match its key expression.
+   */
+  matchingStatus(): Promise<MatchingStatus>
+  /**
+   * Declares a listener that notifies whenever this publisher's matching status
+   * changes (subscribers appear or disappear).
+   *
+   * The `handler` option chooses the channel (default: FIFO of
+   * [`DEFAULT_CHANNEL_CAPACITY`]).
+   */
+  matchingListener(options?: MatchingListenerOptions | undefined | null): Promise<MatchingListener>
+  /**
    * Undeclare this publisher. Resolves once undeclaration completes; a second
    * call is a no-op. `undeclare(self)` consumes the publisher, so the owned
    * value is `.take()`n out of the `Option` before awaiting.
@@ -370,6 +507,32 @@ export declare class Reply {
 export declare class ReplyError {
   get encoding(): Encoding
   get payload(): Bytes
+}
+
+export declare class RingChannelHandlerMatchingStatus {
+  /**
+   * Receives the next value, resolving when one is available. Rejects once
+   * the subscription is gone (the ring's strong owner has been dropped).
+   */
+  recvAsync(): Promise<MatchingStatus>
+  /**
+   * Receives a value without blocking, returning `null` if the ring is
+   * currently empty.
+   */
+  tryRecv(): MatchingStatus | null
+}
+
+export declare class RingChannelHandlerMiss {
+  /**
+   * Receives the next value, resolving when one is available. Rejects once
+   * the subscription is gone (the ring's strong owner has been dropped).
+   */
+  recvAsync(): Promise<Miss>
+  /**
+   * Receives a value without blocking, returning `null` if the ring is
+   * currently empty.
+   */
+  tryRecv(): Miss | null
 }
 
 export declare class RingChannelHandlerSample {
@@ -397,6 +560,30 @@ export declare class Sample {
   get reliability(): Reliability
   get attachment(): Bytes | null
   get sourceInfo(): SourceInfo | null
+}
+
+/**
+ * A listener that notifies of missed samples on a subscription. Declared via
+ * `Subscriber.sampleMissListener`; misses are only detected when the matching
+ * publisher enables `sampleMissDetection`.
+ */
+export declare class SampleMissListener {
+  /**
+   * The receive end of the listener. A `FifoChannelHandler` or
+   * `RingChannelHandler` depending on the channel chosen at declare time.
+   *
+   * The handler is not iterable; iterate via `listener.handler.stream()`.
+   */
+  get handler(): FifoChannelHandlerMiss | RingChannelHandlerMiss
+  /**
+   * Undeclare this sample-miss listener. Resolves once undeclaration completes;
+   * a second call is a no-op.
+   *
+   * For a ring listener still referenced by an outstanding handler, this drops
+   * our strong reference and lets the background drop undeclare it once the
+   * last handler is released.
+   */
+  undeclare(): Promise<void>
 }
 
 /**
@@ -524,6 +711,15 @@ export declare class Subscriber {
    * The handler is not iterable; iterate via `subscriber.handler.stream()`.
    */
   get handler(): FifoChannelHandlerSample | RingChannelHandlerSample
+  /**
+   * Declares a listener that notifies of samples missed on this subscription.
+   *
+   * Misses are only detected when the matching publisher enables
+   * `sampleMissDetection`. The `handler` option chooses the channel (default:
+   * FIFO of [`DEFAULT_CHANNEL_CAPACITY`]); it is independent of the
+   * subscription's own channel.
+   */
+  sampleMissListener(options?: SampleMissListenerOptions | undefined | null): Promise<SampleMissListener>
   /**
    * Undeclare this subscription. Resolves once undeclaration completes; a
    * second call is a no-op.
@@ -695,6 +891,12 @@ export type Locality = /** Only entities in the same session. */
 /** Both local and remote entities. */
 'Any';
 
+/** Options for `Publisher.matchingListener` — selects the notification channel. */
+export interface MatchingListenerOptions {
+  /** Channel selection for the listener's handler (default: FIFO). */
+  handler?: ChannelConfig
+}
+
 export interface MissDetectionConfig {
   heartbeat?: HeartbeatConfig
 }
@@ -833,6 +1035,12 @@ export interface ReplyOptions {
 
 export type SampleKind =  'Put'|
 'Delete';
+
+/** Options for `Subscriber.sampleMissListener` — selects the notification channel. */
+export interface SampleMissListenerOptions {
+  /** Channel selection for the listener's handler (default: FIFO). */
+  handler?: ChannelConfig
+}
 
 /** The deconstructed string parts of a [`Selector`]. */
 export interface SelectorParts {

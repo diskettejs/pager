@@ -10,7 +10,13 @@
 // This file is deliberately minimal and must stay that way: it is NOT a home for
 // convenience helpers.
 
-import { Publisher, Session, Subscriber } from './binding.js'
+import {
+  MatchingListener,
+  Publisher,
+  SampleMissListener,
+  Session,
+  Subscriber,
+} from './binding.js'
 
 Session.prototype[Symbol.asyncDispose] = function () {
   return this.close()
@@ -24,8 +30,15 @@ Publisher.prototype[Symbol.asyncDispose] = function () {
   return this.undeclare()
 }
 
-// Future entities (Queryable / Querier / MatchingListener / SampleMissListener /
-// LivelinessToken / Scout) follow the same pattern as they land — async cleanup
-// → `Symbol.asyncDispose`.
+MatchingListener.prototype[Symbol.asyncDispose] = function () {
+  return this.undeclare()
+}
+
+SampleMissListener.prototype[Symbol.asyncDispose] = function () {
+  return this.undeclare()
+}
+
+// Future entities (Queryable / Querier / LivelinessToken / Scout) follow the
+// same pattern as they land — async cleanup → `Symbol.asyncDispose`.
 
 export * from './binding.js'
