@@ -8,14 +8,14 @@ use zenoh::sample::Sample as ZSample;
 use zenoh::session::EntityGlobalId as ZEntityGlobalId;
 use zenoh_ext::AdvancedSubscriber;
 
-use crate::entity_global_id::EntityGlobalId;
 use crate::handlers::{
   ChannelKind, DEFAULT_CHANNEL_CAPACITY, FifoChannelHandlerSample, RingChannelHandlerSample,
 };
 use crate::keyexpr::KeyExpr;
-use crate::liveliness_subscriber::LivelinessSubscriber;
+use crate::liveliness::LivelinessSubscriber;
 use crate::options::{LivelinessSubscriberOptions, SampleMissListenerOptions};
 use crate::sample_miss_listener::SampleMissListener;
+use crate::session::EntityGlobalId;
 
 enum SubInner {
   Fifo(AdvancedSubscriber<FifoChannelHandler<ZSample>>),
@@ -72,8 +72,6 @@ impl Subscriber {
 
   /// The receive end of the subscription. A `FifoChannelHandler` or
   /// `RingChannelHandler` depending on the channel chosen at declare time.
-  ///
-  /// The handler is not iterable; iterate via `subscriber.handler.stream()`.
   #[napi(getter)]
   pub fn handler(
     &self,
@@ -93,7 +91,7 @@ impl Subscriber {
   ///
   /// Misses are only detected when the matching publisher enables
   /// `sampleMissDetection`. The `handler` option chooses the channel (default:
-  /// FIFO of [`DEFAULT_CHANNEL_CAPACITY`]); it is independent of the
+  /// FIFO with capacity 256); it is independent of the
   /// subscription's own channel.
   #[napi]
   pub async fn sample_miss_listener(
@@ -137,8 +135,8 @@ impl Subscriber {
   /// Only publishers that enable `publisherDetection` are detectable. Resolves
   /// to a `LivelinessSubscriber` over the derived detection key expression (a
   /// `Put` marks a publisher appearing, a `Delete` one disappearing). The
-  /// `handler` option chooses the channel (default: FIFO of
-  /// [`DEFAULT_CHANNEL_CAPACITY`]); `history` replays the currently-matching
+  /// `handler` option chooses the channel (default: FIFO with capacity 256);
+  /// `history` replays the currently-matching
   /// publishers on declaration.
   #[napi]
   pub async fn detect_publishers(
@@ -186,10 +184,6 @@ impl Subscriber {
 
   /// Undeclare this subscription. Resolves once undeclaration completes; a
   /// second call is a no-op.
-  ///
-  /// For a ring subscription still referenced by an outstanding handler, this
-  /// drops our strong reference and lets the background drop undeclare it once
-  /// the last handler is released.
   #[napi]
   pub async unsafe fn undeclare(&mut self) -> napi::Result<()> {
     match self.inner.take() {

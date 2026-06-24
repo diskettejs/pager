@@ -8,7 +8,6 @@ pub struct Bytes {
 }
 
 impl Bytes {
-  /// Internal constructor contract: wrap an owned `zenoh` value.
   pub(crate) fn from_inner(inner: ZBytes) -> Self {
     Bytes { inner }
   }

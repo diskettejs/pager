@@ -7,14 +7,31 @@ use zenoh::matching::{MatchingListener as ZMatchingListener, MatchingStatus as Z
 
 use crate::handlers::{FifoChannelHandlerMatchingStatus, RingChannelHandlerMatchingStatus};
 
+#[napi]
+pub struct MatchingStatus {
+  pub(crate) inner: ZMatchingStatus,
+}
+
+impl MatchingStatus {
+  pub(crate) fn from_inner(inner: ZMatchingStatus) -> Self {
+    MatchingStatus { inner }
+  }
+}
+
+#[napi]
+impl MatchingStatus {
+  #[napi(getter)]
+  pub fn matching(&self) -> bool {
+    self.inner.matching()
+  }
+}
+
 enum ListenerInner {
   Fifo(ZMatchingListener<FifoChannelHandler<ZMatchingStatus>>),
   Ring(Arc<ZMatchingListener<RingChannelHandler<ZMatchingStatus>>>),
 }
 
-/// A listener that notifies whenever the matching status of its
-/// `Publisher`/`Querier` changes (whether matching entities exist). Declared
-/// via `Publisher.matchingListener`.
+/// A listener that notifies whenever the matching status of its `Publisher`/`Querier` changes (whether matching entities exist)
 #[napi]
 pub struct MatchingListener {
   // `None` once undeclared.
@@ -43,8 +60,6 @@ impl MatchingListener {
 impl MatchingListener {
   /// The receive end of the listener. A `FifoChannelHandler` or
   /// `RingChannelHandler` depending on the channel chosen at declare time.
-  ///
-  /// The handler is not iterable; iterate via `listener.handler.stream()`.
   #[napi(getter)]
   pub fn handler(
     &self,
@@ -64,10 +79,6 @@ impl MatchingListener {
 
   /// Undeclare this matching listener. Resolves once undeclaration completes; a
   /// second call is a no-op.
-  ///
-  /// For a ring listener still referenced by an outstanding handler, this drops
-  /// our strong reference and lets the background drop undeclare it once the
-  /// last handler is released.
   #[napi]
   pub async unsafe fn undeclare(&mut self) -> napi::Result<()> {
     match self.inner.take() {

@@ -7,7 +7,6 @@ pub struct Config {
 }
 
 impl Config {
-  /// Internal constructor contract: wrap an owned `zenoh` value.
   pub(crate) fn from_inner(inner: ZConfig) -> Self {
     Config { inner }
   }
@@ -23,14 +22,14 @@ impl Config {
     }
   }
 
-  /// The default environment variable containing the file path used in [`Config::from_env`].
+  /// The default environment variable containing the file path used in `fromEnv`.
   #[napi]
   pub fn default_config_path_env() -> String {
     ZConfig::DEFAULT_CONFIG_PATH_ENV.to_string()
   }
 
   /// Load configuration from the file path specified in the
-  /// [`Config::default_config_path_env`] environment variable.
+  /// `defaultConfigPathEnv` environment variable.
   #[napi(factory)]
   pub fn from_env() -> napi::Result<Self> {
     let inner = ZConfig::from_env().map_err(|e| napi::Error::from_reason(e.to_string()))?;

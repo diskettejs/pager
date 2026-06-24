@@ -3,7 +3,7 @@ use napi::bindgen_prelude::{FromNapiRef, FromNapiValue, TypeName, sys};
 use napi_derive::napi;
 use zenoh::sample::SourceInfo as ZSourceInfo;
 
-use crate::entity_global_id::EntityGlobalId;
+use crate::session::EntityGlobalId;
 
 #[napi]
 pub struct SourceInfo {
@@ -11,7 +11,6 @@ pub struct SourceInfo {
 }
 
 impl SourceInfo {
-  /// Internal constructor contract: wrap an owned `zenoh` value.
   pub(crate) fn from_inner(inner: ZSourceInfo) -> Self {
     SourceInfo { inner }
   }

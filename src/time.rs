@@ -1,6 +1,9 @@
+use std::time::{Duration, SystemTime};
+
 use napi::ValueType;
 use napi::bindgen_prelude::{BigInt, FromNapiRef, FromNapiValue, TypeName, sys};
 use napi_derive::napi;
+use zenoh::query::{TimeBound as ZTimeBound, TimeRange as ZTimeRange};
 use zenoh::time::Timestamp as ZTimestamp;
 
 #[napi]
@@ -9,7 +12,6 @@ pub struct Timestamp {
 }
 
 impl Timestamp {
-  /// Internal constructor contract: wrap an owned `zenoh` value.
   pub(crate) fn from_inner(inner: ZTimestamp) -> Self {
     Timestamp { inner }
   }
@@ -23,7 +25,7 @@ impl Timestamp {
 #[napi]
 impl Timestamp {
   /// Parse an RFC3339 time representation (`<rfc3339>/<hlc_id_hex>`) into a
-  /// [`Timestamp`].
+  /// `Timestamp`.
   #[napi(factory)]
   pub fn parse_rfc3339(s: String) -> napi::Result<Self> {
     ZTimestamp::parse_rfc3339(&s)
@@ -58,9 +60,6 @@ impl Timestamp {
 }
 
 /// Owned input form of [`Timestamp`] for use as an options field.
-///
-/// Copies the inner `zenoh` value out at unwrap time, so it can be carried
-/// across an `.await` without borrowing the JS class instance.
 pub struct TimestampArg(pub(crate) ZTimestamp);
 
 impl FromNapiValue for TimestampArg {
@@ -78,4 +77,59 @@ impl TypeName for TimestampArg {
   fn value_type() -> ValueType {
     ValueType::Object
   }
+}
+
+#[napi]
+pub struct TimeRange {
+  pub(crate) inner: ZTimeRange,
+}
+
+impl TimeRange {
+  pub(crate) fn from_inner(inner: ZTimeRange) -> Self {
+    TimeRange { inner }
+  }
+}
+
+/// Best-effort string form of a `TimeBound<TimeExpr>`. `Unbounded` maps to
+/// `None` (JS `null`); inclusive/exclusive bounds render their `TimeExpr`.
+fn bound_to_string(bound: &ZTimeBound<zenoh::query::TimeExpr>) -> Option<String> {
+  match bound {
+    ZTimeBound::Inclusive(t) | ZTimeBound::Exclusive(t) => Some(t.to_string()),
+    ZTimeBound::Unbounded => None,
+  }
+}
+
+#[napi]
+impl TimeRange {
+  /// The start bound as a string (the time expression), or `null` if the range
+  /// is unbounded at the start.
+  #[napi(getter)]
+  pub fn start(&self) -> Option<String> {
+    bound_to_string(&self.inner.start)
+  }
+
+  /// The end bound as a string (the time expression), or `null` if the range is
+  /// unbounded at the end.
+  #[napi(getter)]
+  pub fn end(&self) -> Option<String> {
+    bound_to_string(&self.inner.end)
+  }
+
+  /// Returns `true` if the given instant (UNIX epoch milliseconds, e.g. from
+  /// `Date.now()`) belongs to this range.
+  ///
+  /// If the bounds contain an "offset" time expression (`now(...)`), this
+  /// resolves them against the current system time on each call.
+  #[napi]
+  pub fn contains(&self, epoch_millis: f64) -> bool {
+    let instant = SystemTime::UNIX_EPOCH + Duration::from_secs_f64(epoch_millis / 1000.0);
+    self.inner.contains(instant)
+  }
+
+  // DEFERRED: `resolve(self) -> TimeRange<SystemTime>` and
+  // `resolve_at(self, now: SystemTime) -> TimeRange<SystemTime>`. Both consume
+  // the range and change the generic to `TimeRange<SystemTime>`, which this
+  // napi class (wrapping `TimeRange<TimeExpr>`) cannot represent. `contains`
+  // already performs the equivalent resolution internally, covering the common
+  // use case.
 }

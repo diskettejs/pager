@@ -6,6 +6,35 @@ use zenoh::handlers::{FifoChannelHandler, RingChannelHandler};
 use zenoh_ext::{Miss as ZMiss, SampleMissListener as ZSampleMissListener};
 
 use crate::handlers::{FifoChannelHandlerMiss, RingChannelHandlerMiss};
+use crate::session::EntityGlobalId;
+
+/// A missed-samples notification, produced by a `SampleMissListener`.
+/// Sample miss detection requires the matching publisher to enable `sampleMissDetection`.
+#[napi]
+pub struct Miss {
+  inner: ZMiss,
+}
+
+impl Miss {
+  pub(crate) fn from_inner(inner: ZMiss) -> Self {
+    Miss { inner }
+  }
+}
+
+#[napi]
+impl Miss {
+  /// The source of the missed samples.
+  #[napi(getter)]
+  pub fn source(&self) -> EntityGlobalId {
+    EntityGlobalId::from_inner(self.inner.source())
+  }
+
+  /// The number of missed samples.
+  #[napi(getter)]
+  pub fn nb(&self) -> u32 {
+    self.inner.nb()
+  }
+}
 
 enum ListenerInner {
   Fifo(ZSampleMissListener<FifoChannelHandler<ZMiss>>),
@@ -39,8 +68,6 @@ impl SampleMissListener {
 impl SampleMissListener {
   /// The receive end of the listener. A `FifoChannelHandler` or
   /// `RingChannelHandler` depending on the channel chosen at declare time.
-  ///
-  /// The handler is not iterable; iterate via `listener.handler.stream()`.
   #[napi(getter)]
   pub fn handler(&self) -> napi::Result<Either<FifoChannelHandlerMiss, RingChannelHandlerMiss>> {
     match self.inner.as_ref() {
@@ -63,10 +90,6 @@ impl SampleMissListener {
 
   /// Undeclare this sample-miss listener. Resolves once undeclaration completes;
   /// a second call is a no-op.
-  ///
-  /// For a ring listener still referenced by an outstanding handler, this drops
-  /// our strong reference and lets the background drop undeclare it once the
-  /// last handler is released.
   #[napi]
   pub async unsafe fn undeclare(&mut self) -> napi::Result<()> {
     match self.inner.take() {

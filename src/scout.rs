@@ -1,14 +1,3 @@
-//! `Scout` — discover other zenoh processes (routers/peers) on the network,
-//! independently of any session.
-//!
-//! `Scout.scout(what, config)` spawns a background task that periodically
-//! multicasts scout messages and delivers each `Hello` reply through the chosen
-//! channel. Modeled as a factory on `Scout` (like `Session.open`), since it is
-//! the sole constructor of a `Scout`. The returned handle keeps scouting until
-//! `stop` is called or it is dropped. Unlike the session entities, cleanup is
-//! synchronous (a local task cancel, no network round-trip), so `Scout` is
-//! `Disposable` (`using`), not async.
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::Either;
@@ -21,7 +10,7 @@ use crate::handlers::{
   ChannelKind, DEFAULT_CHANNEL_CAPACITY, FifoChannelHandlerHello, RingChannelHandlerHello,
 };
 use crate::options::ScoutOptions;
-use crate::whatami_matcher::WhatAmIMatcher;
+use crate::protocol::{Locator, WhatAmI, WhatAmIMatcher};
 
 enum ScoutInner {
   Fifo(ZScout<FifoChannelHandler<ZHello>>),
@@ -54,7 +43,7 @@ impl Scout {
   /// `config` for the multicast settings.
   ///
   /// The `handler` option chooses the channel delivering `Hello` replies
-  /// (default: FIFO of [`DEFAULT_CHANNEL_CAPACITY`]). The returned `Scout` keeps
+  /// (default: FIFO with capacity 256). The returned `Scout` keeps
   /// scouting until `stop` is called or it is dropped.
   #[napi(factory)]
   pub async fn scout(
@@ -90,8 +79,6 @@ impl Scout {
 
   /// The receive end delivering `Hello` replies. A `FifoChannelHandler` or
   /// `RingChannelHandler` depending on the channel chosen at scout time.
-  ///
-  /// The handler is not iterable; iterate via `scout.handler.stream()`.
   #[napi(getter)]
   pub fn handler(&self) -> napi::Result<Either<FifoChannelHandlerHello, RingChannelHandlerHello>> {
     match self.inner.as_ref() {
@@ -119,5 +106,39 @@ impl Scout {
     // Taking the inner out and dropping it cancels the scouting task (its `Drop`
     // calls `stop`); for a ring scout the task lives until the last handle goes.
     let _ = self.inner.take();
+  }
+}
+
+#[napi]
+pub struct Hello {
+  pub(crate) inner: ZHello,
+}
+
+impl Hello {
+  pub(crate) fn from_inner(inner: ZHello) -> Self {
+    Hello { inner }
+  }
+}
+
+#[napi]
+impl Hello {
+  #[napi]
+  pub fn locators(&self) -> Vec<Locator> {
+    self
+      .inner
+      .locators()
+      .iter()
+      .map(|l| Locator::from_inner(l.clone()))
+      .collect()
+  }
+
+  #[napi(getter)]
+  pub fn whatami(&self) -> WhatAmI {
+    self.inner.whatami().into()
+  }
+
+  #[napi(getter)]
+  pub fn zid(&self) -> String {
+    self.inner.zid().to_string()
   }
 }

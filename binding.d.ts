@@ -26,11 +26,11 @@ export declare class CancellationToken {
 export declare class Config {
   /** The default configuration, used to open a session. */
   static default(): Config
-  /** The default environment variable containing the file path used in [`Config::from_env`]. */
+  /** The default environment variable containing the file path used in `fromEnv`. */
   static defaultConfigPathEnv(): string
   /**
    * Load configuration from the file path specified in the
-   * [`Config::default_config_path_env`] environment variable.
+   * `defaultConfigPathEnv` environment variable.
    */
   static fromEnv(): Config
   /** Load configuration from the file at `path`. */
@@ -48,8 +48,8 @@ export declare class Config {
 /**
  * Streaming deserializer implementing the Zenoh serialization format.
  *
- * Read values in the same order they were written. Use [`ZDeserializer::done`]
- * to check whether the buffer is fully consumed.
+ * Read values in the same order they were written. Use `done` to check whether
+ * the buffer is fully consumed.
  */
 export declare class Deserializer {
   constructor(data: Bytes)
@@ -81,8 +81,8 @@ export declare class Deserializer {
   bigInt64Array(): BigInt64Array
   bigUint64Array(): BigUint64Array
   /**
-   * Deserialize an LEB128 variable-length `usize` (the count prefix written by
-   * [`ZSerializer::serialize_varint`]).
+   * Deserialize an LEB128 variable-length non-negative integer (the count prefix
+   * written by `serializeVarint`).
    */
   varint(): bigint
 }
@@ -168,7 +168,7 @@ export declare class EndPoint {
    * `config` string components.
    */
   split(): EndPointParts
-  /** Demotes this endpoint to a [`Locator`], dropping any config component. */
+  /** Demotes this endpoint to a `Locator`, dropping any config component. */
   toLocator(): Locator
 }
 
@@ -677,17 +677,17 @@ export declare class KeyExpr {
   /**
    * Constructs a key expression, rejecting any string that isn't canon.
    *
-   * Use [`KeyExpr::autocanonize`] to canonize the input before validating it.
+   * Use `autocanonize` to canonize the input before validating it.
    */
   constructor(expr: string)
   /** Canonizes the passed value before constructing the key expression. */
   static autocanonize(expr: string): KeyExpr
-  /** Constructs a key expression from a string. Equivalent to [`KeyExpr::new`]. */
+  /** Constructs a key expression from a string. Equivalent to `KeyExpr.new`. */
   static fromStr(expr: string): KeyExpr
   /**
-   * Performs string concatenation and returns the result as a [`KeyExpr`].
+   * Performs string concatenation and returns the result as a `KeyExpr`.
    *
-   * You should probably prefer [`KeyExpr::join`] as zenoh may then take
+   * You should probably prefer `join` as zenoh may then take
    * advantage of the hierarchical separation it inserts.
    */
   concat(other: string): KeyExpr
@@ -714,11 +714,11 @@ export declare class KeyExpr {
 }
 
 /**
- * A concrete link within a [`Transport`](crate::transport::Transport). Zenoh can
+ * A concrete link within a `Transport`. Zenoh can
  * establish multiple links to the same remote node using different protocols
  * (TCP, UDP, QUIC, ...).
  *
- * Obtained from `SessionInfo.links` or a [`LinkEvent`].
+ * Obtained from `SessionInfo.links` or a `LinkEvent`.
  */
 export declare class Link {
   /** The Zenoh id of the transport this link belongs to, as a hex string. */
@@ -753,7 +753,7 @@ export declare class Link {
  * An event emitted when a link is added or removed. `kind` is `Put` when the
  * link was added and `Delete` when it was removed.
  *
- * Delivered by a [`LinkEventsListener`].
+ * Delivered by a `LinkEventsListener`.
  */
 export declare class LinkEvent {
   /** `Put` if the link was added, `Delete` if it was removed. */
@@ -770,17 +770,11 @@ export declare class LinkEventsListener {
   /**
    * The receive end of the listener. A `FifoChannelHandler` or
    * `RingChannelHandler` depending on the channel chosen at declare time.
-   *
-   * The handler is not iterable; iterate via `listener.handler.stream()`.
    */
   get handler(): FifoChannelHandlerLinkEvent | RingChannelHandlerLinkEvent
   /**
    * Undeclare this listener. Resolves once undeclaration completes; a second
    * call is a no-op.
-   *
-   * For a ring listener still referenced by an outstanding handler, this drops
-   * our strong reference and lets the background drop undeclare it once the
-   * last handler is released.
    */
   undeclare(): Promise<void>
 }
@@ -801,30 +795,16 @@ export declare class Liveliness {
    * liveliness for that key expression until it is undeclared or dropped.
    */
   declareToken(keyExpr: string | KeyExpr): Promise<LivelinessToken>
-  /**
-   * Declares a subscription to liveliness changes matching `keyExpr`.
-   *
-   * The `handler` option chooses the channel (default: FIFO of
-   * [`DEFAULT_CHANNEL_CAPACITY`]); `history` replays the current matching
-   * tokens on declaration.
-   */
+  /** Declares a subscription to liveliness changes matching `keyExpr`. */
   declareSubscriber(keyExpr: string | KeyExpr, options?: LivelinessSubscriberOptions | undefined | null): Promise<LivelinessSubscriber>
   /**
    * Queries liveliness tokens matching `keyExpr` and returns the reply handler.
-   * A `FifoChannelHandler` or `RingChannelHandler` depending on the channel
-   * chosen via the `handler` option (default: FIFO of
-   * [`DEFAULT_CHANNEL_CAPACITY`]).
-   *
-   * Each reply's `Put` sample carries the key expression of a currently-alive
-   * token. The handler completes (disconnects) once the query is resolved.
+   * The handler completes (disconnects) once the query is resolved.
    */
   get(keyExpr: string | KeyExpr, options?: LivelinessGetOptions | undefined | null): Promise<FifoChannelHandlerReply | RingChannelHandlerReply>
 }
 
-/**
- * A subscription to liveliness changes on a key expression, declared via
- * `Liveliness.declareSubscriber`.
- */
+/** A subscription to liveliness changes on a key expression. */
 export declare class LivelinessSubscriber {
   /** The key expression this subscription matches. */
   get keyExpr(): KeyExpr
@@ -833,26 +813,19 @@ export declare class LivelinessSubscriber {
   /**
    * The receive end of the subscription. A `FifoChannelHandler` or
    * `RingChannelHandler` depending on the channel chosen at declare time.
-   *
-   * The handler is not iterable; iterate via `subscriber.handler.stream()`.
    */
   get handler(): FifoChannelHandlerSample | RingChannelHandlerSample
   /**
    * Undeclare this subscription. Resolves once undeclaration completes; a
    * second call is a no-op.
-   *
-   * For a ring subscription still referenced by an outstanding handler, this
-   * drops our strong reference and lets the background drop undeclare it once
-   * the last handler is released.
    */
   undeclare(): Promise<void>
 }
 
 export declare class LivelinessToken {
   /**
-   * Undeclare this liveliness token. `undeclare(self)` consumes the token, so
-   * the owned value is `.take()`n out of the `Option` before awaiting. If the
-   * token was already undeclared (or dropped), this is a no-op.
+   * Undeclare this liveliness token. If the token was already undeclared (or
+   * dropped), this is a no-op.
    */
   undeclare(): Promise<void>
 }
@@ -871,30 +844,20 @@ export declare class Locator {
   get asStr(): string
   /** The metadata view of this locator. */
   metadata(): Metadata
-  /** Promotes this locator to an [`EndPoint`]. */
+  /** Promotes this locator to an `EndPoint`. */
   toEndpoint(): EndPoint
 }
 
-/**
- * A listener that notifies whenever the matching status of its
- * `Publisher`/`Querier` changes (whether matching entities exist). Declared
- * via `Publisher.matchingListener`.
- */
+/** A listener that notifies whenever the matching status of its `Publisher`/`Querier` changes (whether matching entities exist) */
 export declare class MatchingListener {
   /**
    * The receive end of the listener. A `FifoChannelHandler` or
    * `RingChannelHandler` depending on the channel chosen at declare time.
-   *
-   * The handler is not iterable; iterate via `listener.handler.stream()`.
    */
   get handler(): FifoChannelHandlerMatchingStatus | RingChannelHandlerMatchingStatus
   /**
    * Undeclare this matching listener. Resolves once undeclaration completes; a
    * second call is a no-op.
-   *
-   * For a ring listener still referenced by an outstanding handler, this drops
-   * our strong reference and lets the background drop undeclare it once the
-   * last handler is released.
    */
   undeclare(): Promise<void>
 }
@@ -933,9 +896,8 @@ export declare class Metadata {
 }
 
 /**
- * A missed-samples notification, produced by a [`SampleMissListener`]. Sample
- * miss detection requires the matching publisher to enable
- * `sampleMissDetection`.
+ * A missed-samples notification, produced by a `SampleMissListener`.
+ * Sample miss detection requires the matching publisher to enable `sampleMissDetection`.
  */
 export declare class Miss {
   /** The source of the missed samples. */
@@ -957,11 +919,7 @@ export declare class MissStream {
 export declare class Parameters {
   /** Creates empty parameters. */
   static empty(): Parameters
-  /**
-   * Parses parameters from a string in the `a=b;c=d|e;f=g` format.
-   *
-   * The owned `String` yields a `Parameters<'static>`.
-   */
+  /** Parses parameters from a string in the `a=b;c=d|e;f=g` format. */
   constructor(params: string)
   /** Returns the parameters as their canonical string form. */
   get asStr(): string
@@ -1009,15 +967,11 @@ export declare class Publisher {
   /**
    * Declares a listener that notifies whenever this publisher's matching status
    * changes (subscribers appear or disappear).
-   *
-   * The `handler` option chooses the channel (default: FIFO of
-   * [`DEFAULT_CHANNEL_CAPACITY`]).
    */
   matchingListener(options?: MatchingListenerOptions | undefined | null): Promise<MatchingListener>
   /**
    * Undeclare this publisher. Resolves once undeclaration completes; a second
-   * call is a no-op. `undeclare(self)` consumes the publisher, so the owned
-   * value is `.take()`n out of the `Option` before awaiting.
+   * call is a no-op.
    */
   undeclare(): Promise<void>
 }
@@ -1039,10 +993,7 @@ export declare class Querier {
   /**
    * Sends a query and returns the reply handler. A `FifoChannelHandler` or
    * `RingChannelHandler` depending on the channel chosen via the `handler`
-   * option (default: FIFO of [`DEFAULT_CHANNEL_CAPACITY`]).
-   *
-   * The handler is not iterable; iterate via `replies.stream()`. It completes
-   * (disconnects) once the query is resolved.
+   * option (default: FIFO with capacity 256). Completes (disconnects) once the query is resolved.
    */
   get(options?: QuerierGetOptions | undefined | null): Promise<FifoChannelHandlerReply | RingChannelHandlerReply>
   /**
@@ -1053,9 +1004,6 @@ export declare class Querier {
   /**
    * Declares a listener that notifies whenever this querier's matching status
    * changes (matching queryables appear or disappear).
-   *
-   * The `handler` option chooses the channel (default: FIFO of
-   * [`DEFAULT_CHANNEL_CAPACITY`]).
    */
   matchingListener(options?: MatchingListenerOptions | undefined | null): Promise<MatchingListener>
   /**
@@ -1068,11 +1016,6 @@ export declare class Querier {
 /**
  * A query received by a `Queryable` — a request this session is expected to
  * answer by sending zero or more replies.
- *
- * Reply with `reply` (a `Put` sample), `replyErr` (an error), or `replyDel` (a
- * `Delete` sample). A query may be answered any number of times. When the
- * `Query` is dropped without further replies, zenoh finalizes it; nothing here
- * needs to be called to "close" it.
  */
 export declare class Query {
   /** The full selector (key expression + parameters) of this query. */
@@ -1097,24 +1040,11 @@ export declare class Query {
   get congestionControl(): CongestionControl
   /** Whether the reply is sent express (not batched). */
   get express(): boolean
-  /**
-   * Replies to this query with a `Put` sample on `keyExpr`.
-   *
-   * By default a query only accepts replies whose key expression intersects
-   * its own (see `acceptReplies`).
-   */
+  /** Replies to this query with a `Put` sample on `keyExpr`. */
   reply(keyExpr: string | KeyExpr, payload: string | Uint8Array, options?: ReplyOptions | undefined | null): Promise<void>
-  /**
-   * Replies to this query with an error payload.
-   *
-   * The error reply is sent with the QoS of the query.
-   */
+  /** Replies to this query with an error payload. */
   replyErr(payload: string | Uint8Array, options?: ReplyErrOptions | undefined | null): Promise<void>
-  /**
-   * Replies to this query with a `Delete` sample on `keyExpr`.
-   *
-   * The reply is sent with the QoS of the query.
-   */
+  /** Replies to this query with a `Delete` sample on `keyExpr`. */
   replyDel(keyExpr: string | KeyExpr, options?: ReplyDelOptions | undefined | null): Promise<void>
 }
 
@@ -1126,17 +1056,11 @@ export declare class Queryable {
   /**
    * The receive end delivering incoming queries. A `FifoChannelHandler` or
    * `RingChannelHandler` depending on the channel chosen at declare time.
-   *
-   * The handler is not iterable; iterate via `queryable.handler.stream()`.
    */
   get handler(): FifoChannelHandlerQuery | RingChannelHandlerQuery
   /**
    * Undeclare this queryable. Resolves once undeclaration completes; a second
    * call is a no-op.
-   *
-   * For a ring queryable still referenced by an outstanding handler, this
-   * drops our strong reference and lets the background drop undeclare it once
-   * the last handler is released.
    */
   undeclare(): Promise<void>
 }
@@ -1450,17 +1374,11 @@ export declare class SampleMissListener {
   /**
    * The receive end of the listener. A `FifoChannelHandler` or
    * `RingChannelHandler` depending on the channel chosen at declare time.
-   *
-   * The handler is not iterable; iterate via `listener.handler.stream()`.
    */
   get handler(): FifoChannelHandlerMiss | RingChannelHandlerMiss
   /**
    * Undeclare this sample-miss listener. Resolves once undeclaration completes;
    * a second call is a no-op.
-   *
-   * For a ring listener still referenced by an outstanding handler, this drops
-   * our strong reference and lets the background drop undeclare it once the
-   * last handler is released.
    */
   undeclare(): Promise<void>
 }
@@ -1481,15 +1399,13 @@ export declare class Scout {
    * `config` for the multicast settings.
    *
    * The `handler` option chooses the channel delivering `Hello` replies
-   * (default: FIFO of [`DEFAULT_CHANNEL_CAPACITY`]). The returned `Scout` keeps
+   * (default: FIFO with capacity 256). The returned `Scout` keeps
    * scouting until `stop` is called or it is dropped.
    */
   static scout(what: WhatAmIMatcher, config: Config, options?: ScoutOptions | undefined | null): Promise<Scout>
   /**
    * The receive end delivering `Hello` replies. A `FifoChannelHandler` or
    * `RingChannelHandler` depending on the channel chosen at scout time.
-   *
-   * The handler is not iterable; iterate via `scout.handler.stream()`.
    */
   get handler(): FifoChannelHandlerHello | RingChannelHandlerHello
   /**
@@ -1503,11 +1419,7 @@ export declare class Scout {
 }
 
 export declare class Selector {
-  /**
-   * Builds a selector from a key expression and optional parameters.
-   *
-   * Both inputs are owned, yielding a `Selector<'static>`.
-   */
+  /** Builds a selector from a key expression and optional parameters. */
   constructor(keyExpr: string | KeyExpr, parameters?: string | undefined | null)
   /** The key expression part of this selector. */
   get keyExpr(): KeyExpr
@@ -1521,8 +1433,8 @@ export declare class Selector {
  * Streaming serializer implementing the Zenoh serialization format.
  *
  * Serializing values one after another is equivalent to serializing a tuple of
- * those values. Call [`ZSerializer::finish`] to consume the serializer and
- * produce the resulting [`Bytes`]; the serializer cannot be used afterwards.
+ * those values. Call `finish` to consume the serializer and produce the
+ * resulting `Bytes`; the serializer cannot be used afterwards.
  */
 export declare class Serializer {
   constructor()
@@ -1540,15 +1452,9 @@ export declare class Serializer {
   f64(value: number): void
   bool(value: boolean): void
   string(value: string): void
-  /**
-   * Serialize a byte blob (LEB128 length prefix + raw bytes). Wire-compatible
-   * with a `Vec<u8>` / `ZBytes`.
-   */
+  /** Serialize a byte blob (LEB128 length prefix + raw bytes). */
   bytes(value: Uint8Array): void
-  /**
-   * Serialize a sequence of strings (LEB128 count + each string). Wire-
-   * compatible with a `Vec<String>`.
-   */
+  /** Serialize a sequence of strings (LEB128 count + each string). */
   stringArray(value: Array<string>): void
   int8Array(value: Int8Array): void
   int16Array(value: Int16Array): void
@@ -1560,12 +1466,12 @@ export declare class Serializer {
   bigInt64Array(value: BigInt64Array): void
   bigUint64Array(value: BigUint64Array): void
   /**
-   * Serialize a `usize` as an LEB128 variable-length integer. Used as the
-   * length/count prefix for hand-rolled sequences, maps, and sets.
+   * Serialize a non-negative integer as an LEB128 variable-length integer. Used
+   * as the length/count prefix for hand-rolled sequences, maps, and sets.
    */
   varint(value: bigint): void
   /**
-   * Consume the serializer and return the serialized [`Bytes`]. Throws if the
+   * Consume the serializer and return the serialized `Bytes`. Throws if the
    * serializer was already finished.
    */
   finish(): Bytes
@@ -1608,67 +1514,25 @@ export declare class Session {
    * A shortcut for declaring a publisher and calling `delete` on it.
    */
   delete(keyExpr: string | KeyExpr, options?: DeleteOptions | undefined | null): Promise<void>
-  /**
-   * Declares `keyExpr` on the session, returning an optimized handle to it.
-   *
-   * Declaring a key expression lets zenoh assign it a numeric id for this
-   * session, cutting wire overhead when the same key expression is used
-   * repeatedly (e.g. across many `put`s). The returned `KeyExpr` is used like
-   * any other but carries that optimization.
-   */
+  /** Declares `keyExpr` on the session, returning an optimized handle to it. */
   declareKeyexpr(keyExpr: string | KeyExpr): Promise<KeyExpr>
-  /**
-   * Declares a subscription on `keyExpr`.
-   *
-   * The `handler` option chooses the channel (default: FIFO of
-   * [`DEFAULT_CHANNEL_CAPACITY`]). Advanced options (`allowedOrigin`,
-   * `history`, `recovery`, subscriber detection, `queryTimeoutMs`) are applied
-   * to the advanced builder.
-   */
+  /** Declares a subscription on `keyExpr`. */
   declareSubscriber(keyExpr: string | KeyExpr, options?: SubscriberOptions | undefined | null): Promise<Subscriber>
-  /**
-   * Declares a publisher on `keyExpr`, fixing its QoS for every publication.
-   *
-   * Advanced options (`cache`, `sampleMissDetection`, publisher detection) are
-   * applied to the advanced builder.
-   */
+  /** Declares a publisher on `keyExpr`, fixing its QoS for every publication. */
   declarePublisher(keyExpr: string | KeyExpr, options?: PublisherOptions | undefined | null): Promise<Publisher>
   /** Declares a querier on `keyExpr`, fixing its config for every `get`. */
   declareQuerier(keyExpr: string | KeyExpr, options?: QuerierOptions | undefined | null): Promise<Querier>
-  /**
-   * Declares a queryable on `keyExpr` that answers matching queries.
-   *
-   * The `handler` option chooses the channel delivering incoming queries
-   * (default: FIFO of [`DEFAULT_CHANNEL_CAPACITY`]); `complete` advertises this
-   * queryable as having the full set of matching data.
-   */
+  /** Declares a queryable on `keyExpr` that answers matching queries. */
   declareQueryable(keyExpr: string | KeyExpr, options?: QueryableOptions | undefined | null): Promise<Queryable>
-  /**
-   * Sends a one-shot query on `selector` and returns the reply handler. A
-   * `FifoChannelHandler` or `RingChannelHandler` depending on the channel
-   * chosen via the `handler` option (default: FIFO of
-   * [`DEFAULT_CHANNEL_CAPACITY`]).
-   *
-   * The selector is a key expression plus optional parameters — pass a
-   * `key/expr?p=1` string, a `KeyExpr` (no parameters), or a `Selector`. The
-   * handler is not iterable; iterate via `replies.stream()`. It completes
-   * (disconnects) once the query is resolved.
-   */
+  /** Sends a one-shot query on `selector` and returns the reply handler. */
   get(selector: string | KeyExpr | Selector, options?: GetOptions | undefined | null): Promise<FifoChannelHandlerReply | RingChannelHandlerReply>
 }
 
 /**
- * The live configuration sub-API for a session, reached via `Session.config()`.
- *
- * Distinct from the [`Config`](crate::config::Config) used to *open* a session
+ * Distinct from the `Config` used to *open* a session
  * (an owned, pre-open snapshot): this is a live handle onto the running
  * session's configuration. `get` / `getPluginConfig` read the current values
- * and `insertJson5` reconfigures the session in place. Mirrors zenoh's
- * `GenericConfig`.
- *
- * Like the other session sub-APIs, this holds a clone of the session and reads
- * the live config (`session.config()`) per call; the surface methods thread
- * through zenoh's `IConfig` without requiring its config internals to be named.
+ * and `insertJson5` reconfigures the session in place.
  */
 export declare class SessionConfig {
   /** Reads the configuration value at `key`, returned as a JSON string. */
@@ -1683,11 +1547,6 @@ export declare class SessionConfig {
   getPluginConfig(pluginName: string): string
 }
 
-/**
- * The connectivity sub-API for a session: who it is connected to (transports,
- * links), its own and its neighbours' Zenoh ids, and listeners for transport /
- * link lifecycle events. Reached via `Session.info()`.
- */
 export declare class SessionInfo {
   /** This session's Zenoh id, as a hex string. */
   zid(): Promise<string>
@@ -1709,16 +1568,16 @@ export declare class SessionInfo {
   links(): Promise<Array<Link>>
   /**
    * Declares a listener for transport lifecycle events (a transport opening or
-   * closing). The `handler` option chooses the channel (default: FIFO of
-   * [`DEFAULT_CHANNEL_CAPACITY`]); `history` replays the currently-open
-   * transports on declaration.
+   * closing). The `handler` option chooses the channel (default: FIFO with
+   * capacity 256); `history` replays the currently-open transports on
+   * declaration.
    */
   transportEventsListener(options?: TransportEventsListenerOptions | undefined | null): Promise<TransportEventsListener>
   /**
    * Declares a listener for link lifecycle events (a link being added or
-   * removed). The `handler` option chooses the channel (default: FIFO of
-   * [`DEFAULT_CHANNEL_CAPACITY`]); `history` replays the currently-established
-   * links on declaration.
+   * removed). The `handler` option chooses the channel (default: FIFO with
+   * capacity 256); `history` replays the currently-established links on
+   * declaration.
    */
   linkEventsListener(options?: LinkEventsListenerOptions | undefined | null): Promise<LinkEventsListener>
 }
@@ -1737,8 +1596,6 @@ export declare class Subscriber {
   /**
    * The receive end of the subscription. A `FifoChannelHandler` or
    * `RingChannelHandler` depending on the channel chosen at declare time.
-   *
-   * The handler is not iterable; iterate via `subscriber.handler.stream()`.
    */
   get handler(): FifoChannelHandlerSample | RingChannelHandlerSample
   /**
@@ -1746,7 +1603,7 @@ export declare class Subscriber {
    *
    * Misses are only detected when the matching publisher enables
    * `sampleMissDetection`. The `handler` option chooses the channel (default:
-   * FIFO of [`DEFAULT_CHANNEL_CAPACITY`]); it is independent of the
+   * FIFO with capacity 256); it is independent of the
    * subscription's own channel.
    */
   sampleMissListener(options?: SampleMissListenerOptions | undefined | null): Promise<SampleMissListener>
@@ -1757,18 +1614,14 @@ export declare class Subscriber {
    * Only publishers that enable `publisherDetection` are detectable. Resolves
    * to a `LivelinessSubscriber` over the derived detection key expression (a
    * `Put` marks a publisher appearing, a `Delete` one disappearing). The
-   * `handler` option chooses the channel (default: FIFO of
-   * [`DEFAULT_CHANNEL_CAPACITY`]); `history` replays the currently-matching
+   * `handler` option chooses the channel (default: FIFO with capacity 256);
+   * `history` replays the currently-matching
    * publishers on declaration.
    */
   detectPublishers(options?: LivelinessSubscriberOptions | undefined | null): Promise<LivelinessSubscriber>
   /**
    * Undeclare this subscription. Resolves once undeclaration completes; a
    * second call is a no-op.
-   *
-   * For a ring subscription still referenced by an outstanding handler, this
-   * drops our strong reference and lets the background drop undeclare it once
-   * the last handler is released.
    */
   undeclare(): Promise<void>
 }
@@ -1797,7 +1650,7 @@ export declare class TimeRange {
 export declare class Timestamp {
   /**
    * Parse an RFC3339 time representation (`<rfc3339>/<hlc_id_hex>`) into a
-   * [`Timestamp`].
+   * `Timestamp`.
    */
   static parseRfc3339(s: string): Timestamp
   /**
@@ -1813,13 +1666,7 @@ export declare class Timestamp {
   getDiffDuration(other: Timestamp): number
 }
 
-/**
- * A transport is a connection established to a remote zenoh node. Multiple
- * transports to the same node can coexist (e.g. a unicast and a multicast one).
- * Each transport carries one or more [`Link`](crate::link::Link)s.
- *
- * Obtained from `SessionInfo.transports` or a [`TransportEvent`].
- */
+/** A transport is a connection established to a remote zenoh node. */
 export declare class Transport {
   /** The Zenoh id of the remote node, as a hex string. */
   get zid(): string
@@ -1835,7 +1682,7 @@ export declare class Transport {
  * An event emitted when a transport is opened or closed. `kind` is `Put` when
  * the transport opened and `Delete` when it closed.
  *
- * Delivered by a [`TransportEventsListener`].
+ * Delivered by a `TransportEventsListener`.
  */
 export declare class TransportEvent {
   /** `Put` if the transport opened, `Delete` if it closed. */
@@ -1852,17 +1699,11 @@ export declare class TransportEventsListener {
   /**
    * The receive end of the listener. A `FifoChannelHandler` or
    * `RingChannelHandler` depending on the channel chosen at declare time.
-   *
-   * The handler is not iterable; iterate via `listener.handler.stream()`.
    */
   get handler(): FifoChannelHandlerTransportEvent | RingChannelHandlerTransportEvent
   /**
    * Undeclare this listener. Resolves once undeclaration completes; a second
    * call is a no-op.
-   *
-   * For a ring listener still referenced by an outstanding handler, this drops
-   * our strong reference and lets the background drop undeclare it once the
-   * last handler is released.
    */
   undeclare(): Promise<void>
 }
@@ -1895,7 +1736,7 @@ export interface CacheConfig {
 /**
  * Channel selection for a declare call's `handler` field.
  *
- * `capacity` defaults to [`DEFAULT_CHANNEL_CAPACITY`] when omitted.
+ * `capacity` defaults to 256 when omitted.
  */
 export interface ChannelConfig {
   kind: ChannelKind
@@ -1926,7 +1767,7 @@ export type ConsolidationMode = /** Automatic consolidation based on the queryab
 /** Hold back to send only the samples with the highest timestamp per key. */
 'Latest';
 
-/** Options for `Session.delete` — mirrors `SessionDeleteBuilder`. */
+/** Options for `Session.delete`. */
 export interface DeleteOptions {
   congestionControl?: CongestionControl
   priority?: Priority
@@ -1939,8 +1780,8 @@ export interface DeleteOptions {
 }
 
 /**
- * The four string components of an [`EndPoint`], as returned by
- * [`EndPoint::split`].
+ * The four string components of an `EndPoint`, as returned by
+ * `split`.
  */
 export interface EndPointParts {
   protocol: string
@@ -1949,7 +1790,7 @@ export interface EndPointParts {
   config: string
 }
 
-/** Options for `Session.get` — mirrors `SessionGetBuilder`. */
+/** Options for `Session.get`. */
 export interface GetOptions {
   target?: QueryTarget
   consolidation?: ConsolidationMode
@@ -1986,10 +1827,7 @@ export interface HistoryConfig {
   maxAgeSecs?: number
 }
 
-/**
- * Options for `SessionInfo.linkEventsListener` — mirrors
- * `LinkEventsListenerBuilder`.
- */
+/** Options for `SessionInfo.linkEventsListener`. */
 export interface LinkEventsListenerOptions {
   /** Send events for the currently-established links before live events. */
   history?: boolean
@@ -1999,7 +1837,7 @@ export interface LinkEventsListenerOptions {
 
 /**
  * The priority range `(min, max)` a link is configured with. The numeric
- * priority values correspond to [`Priority`](crate::qos::Priority) but may also
+ * priority values correspond to `Priority` but may also
  * include `0` (Control), which is not exposed in that enum.
  */
 export interface LinkPriorities {
@@ -2007,7 +1845,7 @@ export interface LinkPriorities {
   max: number
 }
 
-/** Options for `Liveliness.get` — mirrors `LivelinessGetBuilder`. */
+/** Options for `Liveliness.get`. */
 export interface LivelinessGetOptions {
   /** Timeout in milliseconds. */
   timeout?: number
@@ -2016,7 +1854,7 @@ export interface LivelinessGetOptions {
   handler?: ChannelConfig
 }
 
-/** Options for `Liveliness.declareSubscriber` — mirrors `LivelinessSubscriberBuilder`. */
+/** Options for `Liveliness.declareSubscriber`. */
 export interface LivelinessSubscriberOptions {
   history?: boolean
   /** Channel selection for the subscriber's handler (default: FIFO). */
@@ -2060,17 +1898,16 @@ export type Priority =  'RealTime'|
 'Background';
 
 /**
- * Options for `Publisher.delete` — mirrors `AdvancedPublisherDeleteBuilder`.
+ * Options for `Publisher.delete`.
  *
- * As with `PublisherPutOptions`, `source_info` is managed by the advanced
- * builder and has no setter.
+ * `sourceInfo` is managed automatically and cannot be set here.
  */
 export interface PublisherDeleteOptions {
   timestamp?: Timestamp
   attachment?: Uint8Array
 }
 
-/** Options for `Session.declarePublisher` — mirrors `PublisherBuilder`. */
+/** Options for `Session.declarePublisher`. */
 export interface PublisherOptions {
   encoding?: string
   congestionControl?: CongestionControl
@@ -2085,11 +1922,11 @@ export interface PublisherOptions {
 }
 
 /**
- * Options for `Publisher.put` — mirrors `AdvancedPublisherPutBuilder`.
+ * Options for `Publisher.put`.
  *
- * QoS is fixed by the publisher; only per-publication fields appear here. The
- * advanced builder manages `source_info` itself (for sample-miss sequencing)
- * and exposes no setter for it, so it is intentionally absent.
+ * QoS is fixed by the publisher; only per-publication fields appear here.
+ * `sourceInfo` is managed automatically for sample-miss sequencing and cannot
+ * be set here.
  */
 export interface PublisherPutOptions {
   encoding?: string
@@ -2097,7 +1934,7 @@ export interface PublisherPutOptions {
   attachment?: Uint8Array
 }
 
-/** Options for `Session.put` — mirrors `SessionPutBuilder`. */
+/** Options for `Session.put`. */
 export interface PutOptions {
   encoding?: string
   congestionControl?: CongestionControl
@@ -2110,7 +1947,7 @@ export interface PutOptions {
   sourceInfo?: SourceInfo
 }
 
-/** Options for `Querier.get` — mirrors `QuerierGetBuilder`. */
+/** Options for `Querier.get`. */
 export interface QuerierGetOptions {
   parameters?: string | Parameters
   payload?: Uint8Array
@@ -2122,7 +1959,7 @@ export interface QuerierGetOptions {
   handler?: ChannelConfig
 }
 
-/** Options for `Session.declareQuerier` — mirrors `QuerierBuilder`. */
+/** Options for `Session.declareQuerier`. */
 export interface QuerierOptions {
   target?: QueryTarget
   consolidation?: ConsolidationMode
@@ -2135,7 +1972,7 @@ export interface QuerierOptions {
   acceptReplies?: ReplyKeyExpr
 }
 
-/** Options for `Session.declareQueryable` — mirrors `QueryableBuilder`. */
+/** Options for `Session.declareQueryable`. */
 export interface QueryableOptions {
   complete?: boolean
   allowedOrigin?: Locality
@@ -2164,12 +2001,7 @@ export interface RepliesConfig {
   express?: boolean
 }
 
-/**
- * Options for `Query.replyDel` (a `Delete` reply) — mirrors `ReplyBuilder`.
- *
- * As a delete, it carries no payload and therefore no encoding; otherwise it
- * mirrors `ReplyOptions` (and likewise omits the deprecated QoS setters).
- */
+/** Options for `Query.replyDel` (a `Delete` reply). */
 export interface ReplyDelOptions {
   express?: boolean
   timestamp?: Timestamp
@@ -2177,12 +2009,7 @@ export interface ReplyDelOptions {
   sourceInfo?: SourceInfo
 }
 
-/**
- * Options for `Query.replyErr` — mirrors `ReplyErrBuilder`.
- *
- * An error reply carries only a payload and its encoding; it has no key
- * expression or QoS of its own (the reply inherits the query's QoS).
- */
+/** Options for `Query.replyErr`. */
 export interface ReplyErrOptions {
   encoding?: string
 }
@@ -2194,7 +2021,7 @@ export type ReplyKeyExpr = /** Accept replies whose key expressions may not matc
 'MatchingQuery';
 
 /**
- * Options for `Query.reply` (a `Put` reply) — mirrors `ReplyBuilder`.
+ * Options for `Query.reply` (a `Put` reply).
  *
  * `congestionControl` / `priority` are intentionally absent: zenoh deprecated
  * them on replies (they are no-ops — a reply inherits the query's QoS, readable
@@ -2217,19 +2044,19 @@ export interface SampleMissListenerOptions {
   handler?: ChannelConfig
 }
 
-/** Options for `scout` — mirrors `ScoutBuilder`. */
+/** Options for `scout`. */
 export interface ScoutOptions {
   /** Channel selection for the `Hello` handler (default: FIFO). */
   handler?: ChannelConfig
 }
 
-/** The deconstructed string parts of a [`Selector`]. */
+/** The deconstructed string parts of a `Selector`. */
 export interface SelectorParts {
   keyExpr: string
   parameters: string
 }
 
-/** Options for `Session.declareSubscriber` — mirrors `SubscriberBuilder`. */
+/** Options for `Session.declareSubscriber`. */
 export interface SubscriberOptions {
   allowedOrigin?: Locality
   /** Channel selection for the subscription's handler (default: FIFO). */
@@ -2241,10 +2068,7 @@ export interface SubscriberOptions {
   queryTimeoutMs?: number
 }
 
-/**
- * Options for `SessionInfo.transportEventsListener` — mirrors
- * `TransportEventsListenerBuilder`.
- */
+/** Options for `SessionInfo.transportEventsListener`. */
 export interface TransportEventsListenerOptions {
   /** Send events for the currently-open transports before live events. */
   history?: boolean

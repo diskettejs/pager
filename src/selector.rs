@@ -4,7 +4,7 @@ use napi_derive::napi;
 use zenoh::query::Selector as ZSelector;
 
 use crate::keyexpr::{KeyExpr, KeyExprArg};
-use crate::parameters::Parameters;
+use crate::protocol::Parameters;
 
 #[napi]
 pub struct Selector {
@@ -12,13 +12,12 @@ pub struct Selector {
 }
 
 impl Selector {
-  /// Internal constructor contract: wrap an owned `zenoh` value.
   pub(crate) fn from_inner(inner: ZSelector<'static>) -> Self {
     Selector { inner }
   }
 }
 
-/// The deconstructed string parts of a [`Selector`].
+/// The deconstructed string parts of a `Selector`.
 #[napi(object)]
 pub struct SelectorParts {
   pub key_expr: String,
@@ -28,8 +27,6 @@ pub struct SelectorParts {
 #[napi]
 impl Selector {
   /// Builds a selector from a key expression and optional parameters.
-  ///
-  /// Both inputs are owned, yielding a `Selector<'static>`.
   #[napi(constructor)]
   pub fn new(
     #[napi(ts_arg_type = "string | KeyExpr")] key_expr: KeyExprArg,
@@ -62,11 +59,6 @@ impl Selector {
 }
 
 /// Owned input form of [`Selector`] for use at call sites (e.g. `Session.get`).
-///
-/// Accepts a plain JS string (parsed via zenoh's `key/expr?params` split), a
-/// [`KeyExpr`] class instance (an empty-parameter selector), or a [`Selector`]
-/// class instance (cloned). It always owns a `Selector<'static>`, so it never
-/// borrows the JS class instance and can be carried across an `.await`.
 pub struct SelectorArg(pub(crate) ZSelector<'static>);
 
 impl FromNapiValue for SelectorArg {

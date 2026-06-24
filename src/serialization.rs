@@ -49,8 +49,8 @@ fn i128_from_bigint(value: &BigInt) -> napi::Result<i128> {
 /// Streaming serializer implementing the Zenoh serialization format.
 ///
 /// Serializing values one after another is equivalent to serializing a tuple of
-/// those values. Call [`ZSerializer::finish`] to consume the serializer and
-/// produce the resulting [`Bytes`]; the serializer cannot be used afterwards.
+/// those values. Call `finish` to consume the serializer and produce the
+/// resulting `Bytes`; the serializer cannot be used afterwards.
 #[napi]
 pub struct Serializer {
   // `Option` so `finish` can consume the inner serializer (`ZSer::finish(self)`)
@@ -184,16 +184,14 @@ impl Serializer {
     Ok(())
   }
 
-  /// Serialize a byte blob (LEB128 length prefix + raw bytes). Wire-compatible
-  /// with a `Vec<u8>` / `ZBytes`.
+  /// Serialize a byte blob (LEB128 length prefix + raw bytes).
   #[napi]
   pub fn bytes(&mut self, value: Uint8Array) -> napi::Result<()> {
     self.writer()?.serialize(value.as_ref());
     Ok(())
   }
 
-  /// Serialize a sequence of strings (LEB128 count + each string). Wire-
-  /// compatible with a `Vec<String>`.
+  /// Serialize a sequence of strings (LEB128 count + each string).
   #[napi]
   pub fn string_array(&mut self, value: Vec<String>) -> napi::Result<()> {
     self.writer()?.serialize(value.as_slice());
@@ -258,8 +256,8 @@ impl Serializer {
 
   // --- LEB128 varint --------------------------------------------------------
 
-  /// Serialize a `usize` as an LEB128 variable-length integer. Used as the
-  /// length/count prefix for hand-rolled sequences, maps, and sets.
+  /// Serialize a non-negative integer as an LEB128 variable-length integer. Used
+  /// as the length/count prefix for hand-rolled sequences, maps, and sets.
   #[napi]
   pub fn varint(&mut self, value: BigInt) -> napi::Result<()> {
     let (signed, val, lossless) = value.get_u64();
@@ -270,7 +268,7 @@ impl Serializer {
     Ok(())
   }
 
-  /// Consume the serializer and return the serialized [`Bytes`]. Throws if the
+  /// Consume the serializer and return the serialized `Bytes`. Throws if the
   /// serializer was already finished.
   #[napi]
   pub fn finish(&mut self) -> napi::Result<Bytes> {
@@ -290,8 +288,8 @@ impl Default for Serializer {
 
 /// Streaming deserializer implementing the Zenoh serialization format.
 ///
-/// Read values in the same order they were written. Use [`ZDeserializer::done`]
-/// to check whether the buffer is fully consumed.
+/// Read values in the same order they were written. Use `done` to check whether
+/// the buffer is fully consumed.
 #[napi]
 pub struct Deserializer {
   // Owning self-referential pair. `reader` borrows from `owner`; declaring it
@@ -521,8 +519,8 @@ impl Deserializer {
 
   // --- LEB128 varint --------------------------------------------------------
 
-  /// Deserialize an LEB128 variable-length `usize` (the count prefix written by
-  /// [`ZSerializer::serialize_varint`]).
+  /// Deserialize an LEB128 variable-length non-negative integer (the count prefix
+  /// written by `serializeVarint`).
   #[napi]
   pub fn varint(&mut self) -> napi::Result<BigInt> {
     self

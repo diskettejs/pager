@@ -3,16 +3,18 @@ use napi_derive::napi;
 use zenoh::bytes::ZBytes;
 use zenoh::query::{
   ConsolidationMode as ZConsolidationMode, Query as ZQuery, QueryTarget as ZQueryTarget,
-  ReplyKeyExpr as ZReplyKeyExpr,
+  Reply as ZReply, ReplyError as ZReplyError, ReplyKeyExpr as ZReplyKeyExpr,
 };
 
 use crate::bytes::Bytes;
 use crate::encoding::Encoding;
 use crate::keyexpr::{KeyExpr, KeyExprArg};
 use crate::options::{ReplyDelOptions, ReplyErrOptions, ReplyOptions};
-use crate::parameters::Parameters;
+use crate::protocol::Parameters;
 use crate::qos::{CongestionControl, Priority};
+use crate::sample::Sample;
 use crate::selector::Selector;
+use crate::session::EntityGlobalId;
 use crate::source_info::SourceInfo;
 
 /// The kind of queryables that should be targeted by a query.
@@ -108,20 +110,65 @@ impl From<ZReplyKeyExpr> for ReplyKeyExpr {
   }
 }
 
+#[napi]
+pub struct Reply {
+  pub(crate) inner: ZReply,
+}
+
+impl Reply {
+  pub(crate) fn from_inner(inner: ZReply) -> Self {
+    Reply { inner }
+  }
+}
+
+#[napi]
+impl Reply {
+  #[napi]
+  pub fn result(&self) -> Either<Sample, ReplyError> {
+    match self.inner.result() {
+      Ok(s) => Either::A(Sample::new(s.clone())),
+      Err(e) => Either::B(ReplyError::from_inner(e.clone())),
+    }
+  }
+
+  #[napi(getter)]
+  pub fn replier_id(&self) -> Option<EntityGlobalId> {
+    self.inner.replier_id().map(EntityGlobalId::from_inner)
+  }
+}
+
+#[napi]
+pub struct ReplyError {
+  pub(crate) inner: ZReplyError,
+}
+
+impl ReplyError {
+  pub(crate) fn from_inner(inner: ZReplyError) -> Self {
+    ReplyError { inner }
+  }
+}
+
+#[napi]
+impl ReplyError {
+  #[napi(getter)]
+  pub fn encoding(&self) -> Encoding {
+    Encoding::from_inner(self.inner.encoding().clone())
+  }
+
+  #[napi(getter)]
+  pub fn payload(&self) -> Bytes {
+    Bytes::from_inner(self.inner.payload().clone())
+  }
+}
+
 /// A query received by a `Queryable` — a request this session is expected to
 /// answer by sending zero or more replies.
-///
-/// Reply with `reply` (a `Put` sample), `replyErr` (an error), or `replyDel` (a
-/// `Delete` sample). A query may be answered any number of times. When the
-/// `Query` is dropped without further replies, zenoh finalizes it; nothing here
-/// needs to be called to "close" it.
 #[napi]
 pub struct Query {
   inner: ZQuery,
 }
 
 impl Query {
-  /// Internal constructor: wrap the owned `zenoh` query delivered by the handler.
   pub(crate) fn from_inner(inner: ZQuery) -> Self {
     Query { inner }
   }
@@ -200,9 +247,6 @@ impl Query {
   }
 
   /// Replies to this query with a `Put` sample on `keyExpr`.
-  ///
-  /// By default a query only accepts replies whose key expression intersects
-  /// its own (see `acceptReplies`).
   #[napi]
   pub async fn reply(
     &self,
@@ -240,8 +284,6 @@ impl Query {
   }
 
   /// Replies to this query with an error payload.
-  ///
-  /// The error reply is sent with the QoS of the query.
   #[napi]
   pub async fn reply_err(
     &self,
@@ -264,8 +306,6 @@ impl Query {
   }
 
   /// Replies to this query with a `Delete` sample on `keyExpr`.
-  ///
-  /// The reply is sent with the QoS of the query.
   #[napi]
   pub async fn reply_del(
     &self,

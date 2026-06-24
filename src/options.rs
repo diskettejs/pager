@@ -7,10 +7,9 @@ use napi_derive::napi;
 use crate::cancellation::CancellationTokenArg;
 use crate::handlers::ChannelConfig;
 use crate::keyexpr::KeyExprArg;
-use crate::parameters::ParametersArg;
+use crate::protocol::ParametersArg;
 use crate::qos::{CongestionControl, Locality, Priority, Reliability};
 use crate::query::{ConsolidationMode, QueryTarget, ReplyKeyExpr};
-use crate::reply::RepliesConfig;
 use crate::source_info::SourceInfoArg;
 use crate::time::TimestampArg;
 
@@ -62,6 +61,32 @@ pub(crate) fn recovery_into_zenoh(
       config.periodic_queries(Duration::from_millis(periodic.period_ms as u64))
     }
     Either::B(_heartbeat) => config.heartbeat(),
+  }
+}
+
+#[napi(object)]
+pub struct RepliesConfig {
+  /// Priority of reply samples (default: `Data`).
+  pub priority: Option<Priority>,
+  /// Congestion control for reply samples (default: `Block`).
+  pub congestion_control: Option<CongestionControl>,
+  /// When `true`, reply samples are sent unbatched.
+  pub express: Option<bool>,
+}
+
+impl RepliesConfig {
+  pub(crate) fn into_zenoh(self) -> zenoh_ext::RepliesConfig {
+    let mut config = zenoh_ext::RepliesConfig::default();
+    if let Some(priority) = self.priority {
+      config = config.priority(priority.into());
+    }
+    if let Some(congestion_control) = self.congestion_control {
+      config = config.congestion_control(congestion_control.into());
+    }
+    if let Some(express) = self.express {
+      config = config.express(express);
+    }
+    config
   }
 }
 
@@ -127,7 +152,7 @@ impl MissDetectionConfig {
   }
 }
 
-/// Options for `Session.put` — mirrors `SessionPutBuilder`.
+/// Options for `Session.put`.
 #[napi(object, object_to_js = false)]
 pub struct PutOptions {
   pub encoding: Option<String>,
@@ -143,7 +168,7 @@ pub struct PutOptions {
   pub source_info: Option<SourceInfoArg>,
 }
 
-/// Options for `Session.delete` — mirrors `SessionDeleteBuilder`.
+/// Options for `Session.delete`.
 #[napi(object, object_to_js = false)]
 pub struct DeleteOptions {
   pub congestion_control: Option<CongestionControl>,
@@ -158,7 +183,7 @@ pub struct DeleteOptions {
   pub source_info: Option<SourceInfoArg>,
 }
 
-/// Options for `Session.get` — mirrors `SessionGetBuilder`.
+/// Options for `Session.get`.
 #[napi(object, object_to_js = false)]
 pub struct GetOptions {
   pub target: Option<QueryTarget>,
@@ -180,7 +205,7 @@ pub struct GetOptions {
   pub handler: Option<ChannelConfig>,
 }
 
-/// Options for `Session.declarePublisher` — mirrors `PublisherBuilder`.
+/// Options for `Session.declarePublisher`.
 #[napi(object, object_to_js = false)]
 pub struct PublisherOptions {
   pub encoding: Option<String>,
@@ -192,15 +217,14 @@ pub struct PublisherOptions {
   pub cache: Option<CacheConfig>,
   pub sample_miss_detection: Option<MissDetectionConfig>,
   pub publisher_detection: Option<bool>,
-  // TODO: this should also accept KeyExpr
   pub publisher_detection_metadata: Option<String>,
 }
 
-/// Options for `Publisher.put` — mirrors `AdvancedPublisherPutBuilder`.
+/// Options for `Publisher.put`.
 ///
-/// QoS is fixed by the publisher; only per-publication fields appear here. The
-/// advanced builder manages `source_info` itself (for sample-miss sequencing)
-/// and exposes no setter for it, so it is intentionally absent.
+/// QoS is fixed by the publisher; only per-publication fields appear here.
+/// `sourceInfo` is managed automatically for sample-miss sequencing and cannot
+/// be set here.
 #[napi(object, object_to_js = false)]
 pub struct PublisherPutOptions {
   pub encoding: Option<String>,
@@ -209,10 +233,9 @@ pub struct PublisherPutOptions {
   pub attachment: Option<Uint8Array>,
 }
 
-/// Options for `Publisher.delete` — mirrors `AdvancedPublisherDeleteBuilder`.
+/// Options for `Publisher.delete`.
 ///
-/// As with `PublisherPutOptions`, `source_info` is managed by the advanced
-/// builder and has no setter.
+/// `sourceInfo` is managed automatically and cannot be set here.
 #[napi(object, object_to_js = false)]
 pub struct PublisherDeleteOptions {
   #[napi(ts_type = "Timestamp")]
@@ -220,7 +243,7 @@ pub struct PublisherDeleteOptions {
   pub attachment: Option<Uint8Array>,
 }
 
-/// Options for `Session.declareSubscriber` — mirrors `SubscriberBuilder`.
+/// Options for `Session.declareSubscriber`.
 #[napi(object, object_to_js = false)]
 pub struct SubscriberOptions {
   pub allowed_origin: Option<Locality>,
@@ -230,7 +253,6 @@ pub struct SubscriberOptions {
   #[napi(ts_type = "PeriodicQueriesRecovery | HeartbeatRecovery")]
   pub recovery: Option<Either<PeriodicQueriesRecovery, HeartbeatRecovery>>,
   pub subscriber_detection: Option<bool>,
-  // TODO: this should also accept KeyExpr
   pub subscriber_detection_metadata: Option<String>,
   pub query_timeout_ms: Option<f64>,
 }
@@ -249,7 +271,7 @@ pub struct SampleMissListenerOptions {
   pub handler: Option<ChannelConfig>,
 }
 
-/// Options for `Session.declareQueryable` — mirrors `QueryableBuilder`.
+/// Options for `Session.declareQueryable`.
 #[napi(object, object_to_js = false)]
 pub struct QueryableOptions {
   pub complete: Option<bool>,
@@ -258,7 +280,7 @@ pub struct QueryableOptions {
   pub handler: Option<ChannelConfig>,
 }
 
-/// Options for `Session.declareQuerier` — mirrors `QuerierBuilder`.
+/// Options for `Session.declareQuerier`.
 #[napi(object, object_to_js = false)]
 pub struct QuerierOptions {
   pub target: Option<QueryTarget>,
@@ -272,7 +294,7 @@ pub struct QuerierOptions {
   pub accept_replies: Option<ReplyKeyExpr>,
 }
 
-/// Options for `Querier.get` — mirrors `QuerierGetBuilder`.
+/// Options for `Querier.get`.
 #[napi(object, object_to_js = false)]
 pub struct QuerierGetOptions {
   #[napi(ts_type = "string | Parameters")]
@@ -288,7 +310,7 @@ pub struct QuerierGetOptions {
   pub handler: Option<ChannelConfig>,
 }
 
-/// Options for `Query.reply` (a `Put` reply) — mirrors `ReplyBuilder`.
+/// Options for `Query.reply` (a `Put` reply).
 ///
 /// `congestionControl` / `priority` are intentionally absent: zenoh deprecated
 /// them on replies (they are no-ops — a reply inherits the query's QoS, readable
@@ -304,19 +326,13 @@ pub struct ReplyOptions {
   pub source_info: Option<SourceInfoArg>,
 }
 
-/// Options for `Query.replyErr` — mirrors `ReplyErrBuilder`.
-///
-/// An error reply carries only a payload and its encoding; it has no key
-/// expression or QoS of its own (the reply inherits the query's QoS).
+/// Options for `Query.replyErr`.
 #[napi(object, object_to_js = false)]
 pub struct ReplyErrOptions {
   pub encoding: Option<String>,
 }
 
-/// Options for `Query.replyDel` (a `Delete` reply) — mirrors `ReplyBuilder`.
-///
-/// As a delete, it carries no payload and therefore no encoding; otherwise it
-/// mirrors `ReplyOptions` (and likewise omits the deprecated QoS setters).
+/// Options for `Query.replyDel` (a `Delete` reply).
 #[napi(object, object_to_js = false)]
 pub struct ReplyDelOptions {
   pub express: Option<bool>,
@@ -327,7 +343,7 @@ pub struct ReplyDelOptions {
   pub source_info: Option<SourceInfoArg>,
 }
 
-/// Options for `Liveliness.declareSubscriber` — mirrors `LivelinessSubscriberBuilder`.
+/// Options for `Liveliness.declareSubscriber`.
 #[napi(object, object_to_js = false)]
 pub struct LivelinessSubscriberOptions {
   pub history: Option<bool>,
@@ -335,7 +351,7 @@ pub struct LivelinessSubscriberOptions {
   pub handler: Option<ChannelConfig>,
 }
 
-/// Options for `Liveliness.get` — mirrors `LivelinessGetBuilder`.
+/// Options for `Liveliness.get`.
 #[napi(object, object_to_js = false)]
 pub struct LivelinessGetOptions {
   /// Timeout in milliseconds.
@@ -346,15 +362,14 @@ pub struct LivelinessGetOptions {
   pub handler: Option<ChannelConfig>,
 }
 
-/// Options for `scout` — mirrors `ScoutBuilder`.
+/// Options for `scout`.
 #[napi(object, object_to_js = false)]
 pub struct ScoutOptions {
   /// Channel selection for the `Hello` handler (default: FIFO).
   pub handler: Option<ChannelConfig>,
 }
 
-/// Options for `SessionInfo.transportEventsListener` — mirrors
-/// `TransportEventsListenerBuilder`.
+/// Options for `SessionInfo.transportEventsListener`.
 #[napi(object, object_to_js = false)]
 pub struct TransportEventsListenerOptions {
   /// Send events for the currently-open transports before live events.
@@ -363,8 +378,7 @@ pub struct TransportEventsListenerOptions {
   pub handler: Option<ChannelConfig>,
 }
 
-/// Options for `SessionInfo.linkEventsListener` — mirrors
-/// `LinkEventsListenerBuilder`.
+/// Options for `SessionInfo.linkEventsListener`.
 #[napi(object, object_to_js = false)]
 pub struct LinkEventsListenerOptions {
   /// Send events for the currently-established links before live events.

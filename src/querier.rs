@@ -1,13 +1,3 @@
-//! `Querier` — a declared query endpoint with fixed config, reused across many
-//! `get`s.
-//!
-//! Like `Publisher`, `Querier<'a>` holds its session internally (a `WeakSession`,
-//! not a borrow), so declaring with an owned `KeyExpr<'static>` yields a
-//! `Querier<'static>`. Its `get`/`matching_*` builders borrow `&self`, so — as
-//! with `Publisher` — those methods borrow `&self` across the await rather than
-//! cloning. The fixed config is cached so the getters stay infallible and
-//! survive `undeclare`.
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::{Either, Uint8Array};
@@ -18,16 +8,15 @@ use zenoh::qos::{CongestionControl as ZCongestionControl, Priority as ZPriority}
 use zenoh::query::{Querier as ZQuerier, ReplyKeyExpr as ZReplyKeyExpr};
 use zenoh::session::EntityGlobalId as ZEntityGlobalId;
 
-use crate::entity_global_id::EntityGlobalId;
 use crate::handlers::{
   ChannelKind, DEFAULT_CHANNEL_CAPACITY, FifoChannelHandlerReply, RingChannelHandlerReply,
 };
 use crate::keyexpr::KeyExpr;
-use crate::matching_listener::MatchingListener;
-use crate::matching_status::MatchingStatus;
+use crate::matching::{MatchingListener, MatchingStatus};
 use crate::options::{MatchingListenerOptions, QuerierGetOptions};
 use crate::qos::{CongestionControl, Priority};
 use crate::query::ReplyKeyExpr;
+use crate::session::EntityGlobalId;
 
 #[napi]
 pub struct Querier {
@@ -41,7 +30,6 @@ pub struct Querier {
 }
 
 impl Querier {
-  /// Internal constructor: cache the querier's fixed config, then take ownership.
   pub(crate) fn from_inner(querier: ZQuerier<'static>) -> Self {
     let key_expr = querier.key_expr().clone();
     let id = querier.id();
@@ -94,10 +82,7 @@ impl Querier {
 
   /// Sends a query and returns the reply handler. A `FifoChannelHandler` or
   /// `RingChannelHandler` depending on the channel chosen via the `handler`
-  /// option (default: FIFO of [`DEFAULT_CHANNEL_CAPACITY`]).
-  ///
-  /// The handler is not iterable; iterate via `replies.stream()`. It completes
-  /// (disconnects) once the query is resolved.
+  /// option (default: FIFO with capacity 256). Completes (disconnects) once the query is resolved.
   #[napi]
   pub async fn get(
     &self,
@@ -171,9 +156,6 @@ impl Querier {
 
   /// Declares a listener that notifies whenever this querier's matching status
   /// changes (matching queryables appear or disappear).
-  ///
-  /// The `handler` option chooses the channel (default: FIFO of
-  /// [`DEFAULT_CHANNEL_CAPACITY`]).
   #[napi]
   pub async fn matching_listener(
     &self,

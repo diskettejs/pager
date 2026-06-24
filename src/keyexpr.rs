@@ -9,7 +9,6 @@ pub struct KeyExpr {
 }
 
 impl KeyExpr {
-  /// Internal constructor contract: wrap an owned `zenoh` value.
   pub(crate) fn from_inner(inner: ZKeyExpr<'static>) -> Self {
     KeyExpr { inner }
   }
@@ -19,7 +18,7 @@ impl KeyExpr {
 impl KeyExpr {
   /// Constructs a key expression, rejecting any string that isn't canon.
   ///
-  /// Use [`KeyExpr::autocanonize`] to canonize the input before validating it.
+  /// Use `autocanonize` to canonize the input before validating it.
   #[napi(constructor)]
   pub fn new(expr: String) -> napi::Result<Self> {
     let inner: ZKeyExpr<'static> =
@@ -35,15 +34,15 @@ impl KeyExpr {
     Ok(Self::from_inner(inner))
   }
 
-  /// Constructs a key expression from a string. Equivalent to [`KeyExpr::new`].
+  /// Constructs a key expression from a string. Equivalent to `KeyExpr.new`.
   #[napi(factory)]
   pub fn from_str(expr: String) -> napi::Result<Self> {
     Self::new(expr)
   }
 
-  /// Performs string concatenation and returns the result as a [`KeyExpr`].
+  /// Performs string concatenation and returns the result as a `KeyExpr`.
   ///
-  /// You should probably prefer [`KeyExpr::join`] as zenoh may then take
+  /// You should probably prefer `join` as zenoh may then take
   /// advantage of the hierarchical separation it inserts.
   #[napi]
   pub fn concat(&self, other: String) -> napi::Result<KeyExpr> {
@@ -94,11 +93,6 @@ impl KeyExpr {
 }
 
 /// Owned input form of [`KeyExpr`] for use at call sites.
-///
-/// Accepts either a plain JS string (parsed via [`ZKeyExpr::new`]) or a
-/// [`KeyExpr`] class instance (whose inner value is cloned). It always owns a
-/// `KeyExpr<'static>`, so it never borrows the JS class instance and can be
-/// carried across an `.await`.
 pub struct KeyExprArg(pub(crate) ZKeyExpr<'static>);
 
 impl FromNapiValue for KeyExprArg {

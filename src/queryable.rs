@@ -1,11 +1,3 @@
-//! `Queryable` — a declared endpoint that answers queries matching a key
-//! expression.
-//!
-//! Structurally a mirror of `Subscriber`, but its handler yields `Query`
-//! requests (not `Sample`s), and each query is answered via `Query.reply` /
-//! `replyErr` / `replyDel`. As with `Subscriber`, a ring queryable is held
-//! behind an `Arc` so an outstanding ring handler keeps the producer alive.
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::Either;
@@ -15,9 +7,9 @@ use zenoh::key_expr::KeyExpr as ZKeyExpr;
 use zenoh::query::{Query as ZQuery, Queryable as ZQueryable};
 use zenoh::session::EntityGlobalId as ZEntityGlobalId;
 
-use crate::entity_global_id::EntityGlobalId;
 use crate::handlers::{FifoChannelHandlerQuery, RingChannelHandlerQuery};
 use crate::keyexpr::KeyExpr;
+use crate::session::EntityGlobalId;
 
 enum QueryableInner {
   Fifo(ZQueryable<FifoChannelHandler<ZQuery>>),
@@ -74,8 +66,6 @@ impl Queryable {
 
   /// The receive end delivering incoming queries. A `FifoChannelHandler` or
   /// `RingChannelHandler` depending on the channel chosen at declare time.
-  ///
-  /// The handler is not iterable; iterate via `queryable.handler.stream()`.
   #[napi(getter)]
   pub fn handler(&self) -> napi::Result<Either<FifoChannelHandlerQuery, RingChannelHandlerQuery>> {
     match self.inner.as_ref() {
@@ -91,10 +81,6 @@ impl Queryable {
 
   /// Undeclare this queryable. Resolves once undeclaration completes; a second
   /// call is a no-op.
-  ///
-  /// For a ring queryable still referenced by an outstanding handler, this
-  /// drops our strong reference and lets the background drop undeclare it once
-  /// the last handler is released.
   #[napi]
   pub async unsafe fn undeclare(&mut self) -> napi::Result<()> {
     match self.inner.take() {

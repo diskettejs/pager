@@ -1,25 +1,22 @@
-//! `Liveliness` — the liveliness sub-API of a `Session`, reached via
-//! `Session.liveliness()`.
-//!
-//! zenoh's `Liveliness<'a>` borrows the session, so it can't be stored as-is.
-//! Like the other entry points, the wrapper holds an owned `zenoh::Session`
-//! clone (cheap — it's `Arc`-backed) and spins up a fresh `Liveliness<'_>` per
-//! call.
-
 use std::sync::Arc;
 use std::time::Duration;
 
 use napi::bindgen_prelude::Either;
 use napi_derive::napi;
-use zenoh::handlers::{FifoChannel, RingChannel};
+use zenoh::handlers::{FifoChannel, FifoChannelHandler, RingChannel, RingChannelHandler};
+use zenoh::key_expr::KeyExpr as ZKeyExpr;
+use zenoh::liveliness::LivelinessToken as ZLivelinessToken;
+use zenoh::pubsub::Subscriber as ZSubscriber;
+use zenoh::sample::Sample as ZSample;
+use zenoh::session::EntityGlobalId as ZEntityGlobalId;
 
 use crate::handlers::{
-  ChannelKind, DEFAULT_CHANNEL_CAPACITY, FifoChannelHandlerReply, RingChannelHandlerReply,
+  ChannelKind, DEFAULT_CHANNEL_CAPACITY, FifoChannelHandlerReply, FifoChannelHandlerSample,
+  RingChannelHandlerReply, RingChannelHandlerSample,
 };
-use crate::keyexpr::KeyExprArg;
-use crate::liveliness_subscriber::LivelinessSubscriber;
-use crate::liveliness_token::LivelinessToken;
+use crate::keyexpr::{KeyExpr, KeyExprArg};
 use crate::options::{LivelinessGetOptions, LivelinessSubscriberOptions};
+use crate::session::EntityGlobalId;
 
 #[napi]
 pub struct Liveliness {
@@ -27,7 +24,6 @@ pub struct Liveliness {
 }
 
 impl Liveliness {
-  /// Internal constructor: hold an owned session clone to mint `Liveliness<'_>`.
   pub(crate) fn from_session(session: zenoh::Session) -> Self {
     Liveliness { session }
   }
@@ -51,10 +47,6 @@ impl Liveliness {
   }
 
   /// Declares a subscription to liveliness changes matching `keyExpr`.
-  ///
-  /// The `handler` option chooses the channel (default: FIFO of
-  /// [`DEFAULT_CHANNEL_CAPACITY`]); `history` replays the current matching
-  /// tokens on declaration.
   #[napi]
   pub async fn declare_subscriber(
     &self,
@@ -95,12 +87,7 @@ impl Liveliness {
   }
 
   /// Queries liveliness tokens matching `keyExpr` and returns the reply handler.
-  /// A `FifoChannelHandler` or `RingChannelHandler` depending on the channel
-  /// chosen via the `handler` option (default: FIFO of
-  /// [`DEFAULT_CHANNEL_CAPACITY`]).
-  ///
-  /// Each reply's `Put` sample carries the key expression of a currently-alive
-  /// token. The handler completes (disconnects) once the query is resolved.
+  /// The handler completes (disconnects) once the query is resolved.
   #[napi]
   pub async fn get(
     &self,
@@ -139,6 +126,127 @@ impl Liveliness {
         .await
         .map_err(|e| napi::Error::from_reason(e.to_string()))?;
       Ok(Either::A(FifoChannelHandlerReply::from_handler(handler)))
+    }
+  }
+}
+
+#[napi]
+pub struct LivelinessToken {
+  pub(crate) inner: Option<ZLivelinessToken>,
+}
+
+impl LivelinessToken {
+  pub(crate) fn from_inner(inner: ZLivelinessToken) -> Self {
+    LivelinessToken { inner: Some(inner) }
+  }
+}
+
+#[napi]
+impl LivelinessToken {
+  /// Undeclare this liveliness token. If the token was already undeclared (or
+  /// dropped), this is a no-op.
+  #[napi]
+  pub async unsafe fn undeclare(&mut self) -> napi::Result<()> {
+    match self.inner.take() {
+      Some(token) => token
+        .undeclare()
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string())),
+      None => Ok(()),
+    }
+  }
+}
+
+enum SubInner {
+  Fifo(ZSubscriber<FifoChannelHandler<ZSample>>),
+  Ring(Arc<ZSubscriber<RingChannelHandler<ZSample>>>),
+}
+
+/// A subscription to liveliness changes on a key expression.
+#[napi]
+pub struct LivelinessSubscriber {
+  // `None` once undeclared. `key_expr`/`id` are cached so they survive it.
+  inner: Option<SubInner>,
+  key_expr: ZKeyExpr<'static>,
+  id: ZEntityGlobalId,
+}
+
+impl LivelinessSubscriber {
+  pub(crate) fn from_fifo(
+    sub: ZSubscriber<FifoChannelHandler<ZSample>>,
+    key_expr: ZKeyExpr<'static>,
+    id: ZEntityGlobalId,
+  ) -> Self {
+    LivelinessSubscriber {
+      inner: Some(SubInner::Fifo(sub)),
+      key_expr,
+      id,
+    }
+  }
+
+  pub(crate) fn from_ring(
+    sub: ZSubscriber<RingChannelHandler<ZSample>>,
+    key_expr: ZKeyExpr<'static>,
+    id: ZEntityGlobalId,
+  ) -> Self {
+    LivelinessSubscriber {
+      inner: Some(SubInner::Ring(Arc::new(sub))),
+      key_expr,
+      id,
+    }
+  }
+}
+
+#[napi]
+impl LivelinessSubscriber {
+  /// The key expression this subscription matches.
+  #[napi(getter)]
+  pub fn key_expr(&self) -> KeyExpr {
+    KeyExpr::from_inner(self.key_expr.clone())
+  }
+
+  /// The global id of this subscription entity.
+  #[napi(getter)]
+  pub fn id(&self) -> EntityGlobalId {
+    EntityGlobalId::from_inner(self.id)
+  }
+
+  /// The receive end of the subscription. A `FifoChannelHandler` or
+  /// `RingChannelHandler` depending on the channel chosen at declare time.
+  #[napi(getter)]
+  pub fn handler(
+    &self,
+  ) -> napi::Result<Either<FifoChannelHandlerSample, RingChannelHandlerSample>> {
+    match self.inner.as_ref() {
+      Some(SubInner::Fifo(sub)) => Ok(Either::A(FifoChannelHandlerSample::from_handler(
+        sub.handler().clone(),
+      ))),
+      Some(SubInner::Ring(arc)) => Ok(Either::B(RingChannelHandlerSample::from_arc(Arc::clone(
+        arc,
+      )))),
+      None => Err(napi::Error::from_reason(
+        "liveliness subscriber has been undeclared",
+      )),
+    }
+  }
+
+  /// Undeclare this subscription. Resolves once undeclaration completes; a
+  /// second call is a no-op.
+  #[napi]
+  pub async unsafe fn undeclare(&mut self) -> napi::Result<()> {
+    match self.inner.take() {
+      Some(SubInner::Fifo(sub)) => sub
+        .undeclare()
+        .await
+        .map_err(|e| napi::Error::from_reason(e.to_string())),
+      Some(SubInner::Ring(arc)) => match Arc::try_unwrap(arc) {
+        Ok(sub) => sub
+          .undeclare()
+          .await
+          .map_err(|e| napi::Error::from_reason(e.to_string())),
+        Err(_) => Ok(()),
+      },
+      None => Ok(()),
     }
   }
 }

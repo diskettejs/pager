@@ -6,12 +6,12 @@ use zenoh::handlers::{FifoChannelHandler, RingChannelHandler};
 use zenoh::session::{Link as ZLink, LinkEvent as ZLinkEvent, LinkEventsListener as ZListener};
 
 use crate::handlers::{FifoChannelHandlerLinkEvent, RingChannelHandlerLinkEvent};
-use crate::locator::Locator;
+use crate::protocol::Locator;
 use crate::qos::Reliability;
 use crate::sample::SampleKind;
 
 /// The priority range `(min, max)` a link is configured with. The numeric
-/// priority values correspond to [`Priority`](crate::qos::Priority) but may also
+/// priority values correspond to `Priority` but may also
 /// include `0` (Control), which is not exposed in that enum.
 #[napi(object)]
 pub struct LinkPriorities {
@@ -19,18 +19,17 @@ pub struct LinkPriorities {
   pub max: u8,
 }
 
-/// A concrete link within a [`Transport`](crate::transport::Transport). Zenoh can
+/// A concrete link within a `Transport`. Zenoh can
 /// establish multiple links to the same remote node using different protocols
 /// (TCP, UDP, QUIC, ...).
 ///
-/// Obtained from `SessionInfo.links` or a [`LinkEvent`].
+/// Obtained from `SessionInfo.links` or a `LinkEvent`.
 #[napi]
 pub struct Link {
   inner: ZLink,
 }
 
 impl Link {
-  /// Internal constructor contract: wrap an owned `zenoh` value.
   pub(crate) fn from_inner(inner: ZLink) -> Self {
     Link { inner }
   }
@@ -107,14 +106,13 @@ impl Link {
 /// An event emitted when a link is added or removed. `kind` is `Put` when the
 /// link was added and `Delete` when it was removed.
 ///
-/// Delivered by a [`LinkEventsListener`].
+/// Delivered by a `LinkEventsListener`.
 #[napi]
 pub struct LinkEvent {
   inner: ZLinkEvent,
 }
 
 impl LinkEvent {
-  /// Internal constructor contract: wrap an owned `zenoh` value.
   pub(crate) fn from_inner(inner: ZLinkEvent) -> Self {
     LinkEvent { inner }
   }
@@ -166,8 +164,6 @@ impl LinkEventsListener {
 impl LinkEventsListener {
   /// The receive end of the listener. A `FifoChannelHandler` or
   /// `RingChannelHandler` depending on the channel chosen at declare time.
-  ///
-  /// The handler is not iterable; iterate via `listener.handler.stream()`.
   #[napi(getter)]
   pub fn handler(
     &self,
@@ -187,10 +183,6 @@ impl LinkEventsListener {
 
   /// Undeclare this listener. Resolves once undeclaration completes; a second
   /// call is a no-op.
-  ///
-  /// For a ring listener still referenced by an outstanding handler, this drops
-  /// our strong reference and lets the background drop undeclare it once the
-  /// last handler is released.
   #[napi]
   pub async unsafe fn undeclare(&mut self) -> napi::Result<()> {
     match self.inner.take() {

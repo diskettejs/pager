@@ -1,18 +1,19 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use napi::bindgen_prelude::{Either, Uint8Array};
+use napi::bindgen_prelude::{BigInt, Either, Uint8Array};
 use napi_derive::napi;
 use zenoh::bytes::ZBytes;
 use zenoh::handlers::{FifoChannel, RingChannel};
 use zenoh::query::ConsolidationMode as ZConsolidationMode;
+use zenoh::session::EntityGlobalId as ZEntityGlobalId;
 use zenoh_ext::{AdvancedPublisherBuilderExt, AdvancedSubscriberBuilderExt};
 
 use crate::config::Config;
-use crate::entity_global_id::EntityGlobalId;
 use crate::handlers::{
   ChannelKind, DEFAULT_CHANNEL_CAPACITY, FifoChannelHandlerReply, RingChannelHandlerReply,
 };
+use crate::info::SessionInfo;
 use crate::keyexpr::{KeyExpr, KeyExprArg};
 use crate::liveliness::Liveliness;
 use crate::options::{
@@ -23,10 +24,32 @@ use crate::publisher::Publisher;
 use crate::querier::Querier;
 use crate::queryable::Queryable;
 use crate::selector::SelectorArg;
-use crate::session_config::SessionConfig;
-use crate::session_info::SessionInfo;
 use crate::subscriber::Subscriber;
 use crate::time::Timestamp;
+
+#[napi]
+pub struct EntityGlobalId {
+  pub(crate) inner: ZEntityGlobalId,
+}
+
+impl EntityGlobalId {
+  pub(crate) fn from_inner(inner: ZEntityGlobalId) -> Self {
+    EntityGlobalId { inner }
+  }
+}
+
+#[napi]
+impl EntityGlobalId {
+  #[napi(getter)]
+  pub fn zid(&self) -> String {
+    self.inner.zid().to_string()
+  }
+
+  #[napi(getter)]
+  pub fn eid(&self) -> u32 {
+    self.inner.eid()
+  }
+}
 
 #[napi]
 pub struct Session {
@@ -34,7 +57,6 @@ pub struct Session {
 }
 
 impl Session {
-  /// Internal constructor contract: wrap an owned `zenoh` value.
   pub(crate) fn from_inner(inner: zenoh::Session) -> Self {
     Session { inner }
   }
@@ -205,11 +227,6 @@ impl Session {
   }
 
   /// Declares `keyExpr` on the session, returning an optimized handle to it.
-  ///
-  /// Declaring a key expression lets zenoh assign it a numeric id for this
-  /// session, cutting wire overhead when the same key expression is used
-  /// repeatedly (e.g. across many `put`s). The returned `KeyExpr` is used like
-  /// any other but carries that optimization.
   #[napi]
   pub async fn declare_keyexpr(
     &self,
@@ -224,11 +241,6 @@ impl Session {
   }
 
   /// Declares a subscription on `keyExpr`.
-  ///
-  /// The `handler` option chooses the channel (default: FIFO of
-  /// [`DEFAULT_CHANNEL_CAPACITY`]). Advanced options (`allowedOrigin`,
-  /// `history`, `recovery`, subscriber detection, `queryTimeoutMs`) are applied
-  /// to the advanced builder.
   #[napi]
   pub async fn declare_subscriber(
     &self,
@@ -290,9 +302,6 @@ impl Session {
   }
 
   /// Declares a publisher on `keyExpr`, fixing its QoS for every publication.
-  ///
-  /// Advanced options (`cache`, `sampleMissDetection`, publisher detection) are
-  /// applied to the advanced builder.
   #[napi]
   pub async fn declare_publisher(
     &self,
@@ -387,10 +396,6 @@ impl Session {
   }
 
   /// Declares a queryable on `keyExpr` that answers matching queries.
-  ///
-  /// The `handler` option chooses the channel delivering incoming queries
-  /// (default: FIFO of [`DEFAULT_CHANNEL_CAPACITY`]); `complete` advertises this
-  /// queryable as having the full set of matching data.
   #[napi]
   pub async fn declare_queryable(
     &self,
@@ -436,15 +441,7 @@ impl Session {
     }
   }
 
-  /// Sends a one-shot query on `selector` and returns the reply handler. A
-  /// `FifoChannelHandler` or `RingChannelHandler` depending on the channel
-  /// chosen via the `handler` option (default: FIFO of
-  /// [`DEFAULT_CHANNEL_CAPACITY`]).
-  ///
-  /// The selector is a key expression plus optional parameters — pass a
-  /// `key/expr?p=1` string, a `KeyExpr` (no parameters), or a `Selector`. The
-  /// handler is not iterable; iterate via `replies.stream()`. It completes
-  /// (disconnects) once the query is resolved.
+  /// Sends a one-shot query on `selector` and returns the reply handler.
   #[napi]
   pub async fn get(
     &self,
@@ -515,5 +512,66 @@ impl Session {
         .map_err(|e| napi::Error::from_reason(e.to_string()))?;
       Ok(Either::A(FifoChannelHandlerReply::from_handler(handler)))
     }
+  }
+}
+
+/// Distinct from the `Config` used to *open* a session
+/// (an owned, pre-open snapshot): this is a live handle onto the running
+/// session's configuration. `get` / `getPluginConfig` read the current values
+/// and `insertJson5` reconfigures the session in place.
+#[napi]
+pub struct SessionConfig {
+  session: zenoh::Session,
+}
+
+impl SessionConfig {
+  pub(crate) fn from_session(session: zenoh::Session) -> Self {
+    SessionConfig { session }
+  }
+}
+
+#[napi]
+impl SessionConfig {
+  /// Reads the configuration value at `key`, returned as a JSON string.
+  #[napi]
+  pub fn get(&self, key: String) -> napi::Result<String> {
+    self
+      .session
+      .config()
+      .get(&key)
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  /// Inserts the JSON5 `value` at `key`, reconfiguring the running session.
+  #[napi]
+  pub fn insert_json5(&self, key: String, value: String) -> napi::Result<()> {
+    self
+      .session
+      .config()
+      .insert_json5(&key, &value)
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
+  }
+
+  /// The full current configuration, as a JSON string.
+  #[napi]
+  pub fn to_json(&self) -> String {
+    self.session.config().to_json()
+  }
+
+  /// The default timeout applied to queries, in milliseconds.
+  #[napi]
+  pub fn queries_default_timeout_ms(&self) -> BigInt {
+    BigInt::from(self.session.config().queries_default_timeout_ms())
+  }
+
+  /// Reads the configuration of plugin `pluginName`, returned as a JSON string.
+  #[napi]
+  pub fn get_plugin_config(&self, plugin_name: String) -> napi::Result<String> {
+    self
+      .session
+      .config()
+      .get_plugin_config(&plugin_name)
+      .map(|value| value.to_string())
+      .map_err(|e| napi::Error::from_reason(e.to_string()))
   }
 }

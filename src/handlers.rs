@@ -6,14 +6,13 @@ use napi_derive::napi;
 // the `AsyncGenerator::Yield` type (the `[Symbol.asyncIterator]` TS signature is
 // then dropped). An `:ident` is not group-wrapped, so `type Yield = Sample;`
 // stays a bare `Type::Path` and the signature is generated.
-use crate::hello::Hello;
+use crate::info::TransportEvent;
 use crate::link::LinkEvent;
-use crate::matching_status::MatchingStatus;
-use crate::miss::Miss;
-use crate::query::Query;
-use crate::reply::Reply;
+use crate::matching::MatchingStatus;
+use crate::query::{Query, Reply};
 use crate::sample::Sample;
-use crate::transport::TransportEvent;
+use crate::sample_miss_listener::Miss;
+use crate::scout::Hello;
 
 /// Which channel backs a subscription's handler.
 #[napi(string_enum)]
@@ -26,7 +25,7 @@ pub enum ChannelKind {
 
 /// Channel selection for a declare call's `handler` field.
 ///
-/// `capacity` defaults to [`DEFAULT_CHANNEL_CAPACITY`] when omitted.
+/// `capacity` defaults to 256 when omitted.
 #[napi(object, object_to_js = false)]
 pub struct ChannelConfig {
   pub kind: ChannelKind,

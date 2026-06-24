@@ -1,18 +1,3 @@
-//! `Publisher` — a declared publication endpoint with fixed QoS.
-//!
-//! Like subscriptions, publishers are always declared through zenoh-ext's
-//! advanced builder (see SPEC); with no advanced options set it behaves like a
-//! plain publisher. So the entity wraps an `AdvancedPublisher`.
-//!
-//! `AdvancedPublisher<'a>` is parameterised only by its key expression (the
-//! session is held internally as a `WeakSession`, not borrowed), so declaring
-//! with an owned `KeyExpr<'static>` yields an `AdvancedPublisher<'static>` that
-//! can live in this struct. It is not `Clone` and its `put`/`delete` builders
-//! borrow it, so — unlike `Session` — these methods borrow `&self` across the
-//! await rather than cloning first. The fixed config (`keyExpr`/`id`/`encoding`/
-//! `congestionControl`/`priority`) is cached so the getters stay infallible and
-//! survive `undeclare`.
-
 use napi::bindgen_prelude::{Either, Uint8Array};
 use napi_derive::napi;
 use zenoh::bytes::Encoding as ZEncoding;
@@ -24,13 +9,12 @@ use zenoh::session::EntityGlobalId as ZEntityGlobalId;
 use zenoh_ext::AdvancedPublisher;
 
 use crate::encoding::Encoding;
-use crate::entity_global_id::EntityGlobalId;
 use crate::handlers::{ChannelKind, DEFAULT_CHANNEL_CAPACITY};
 use crate::keyexpr::KeyExpr;
-use crate::matching_listener::MatchingListener;
-use crate::matching_status::MatchingStatus;
+use crate::matching::{MatchingListener, MatchingStatus};
 use crate::options::{MatchingListenerOptions, PublisherDeleteOptions, PublisherPutOptions};
 use crate::qos::{CongestionControl, Priority};
+use crate::session::EntityGlobalId;
 
 #[napi]
 pub struct Publisher {
@@ -169,9 +153,6 @@ impl Publisher {
 
   /// Declares a listener that notifies whenever this publisher's matching status
   /// changes (subscribers appear or disappear).
-  ///
-  /// The `handler` option chooses the channel (default: FIFO of
-  /// [`DEFAULT_CHANNEL_CAPACITY`]).
   #[napi]
   pub async fn matching_listener(
     &self,
@@ -207,8 +188,7 @@ impl Publisher {
   }
 
   /// Undeclare this publisher. Resolves once undeclaration completes; a second
-  /// call is a no-op. `undeclare(self)` consumes the publisher, so the owned
-  /// value is `.take()`n out of the `Option` before awaiting.
+  /// call is a no-op.
   #[napi]
   pub async unsafe fn undeclare(&mut self) -> napi::Result<()> {
     match self.inner.take() {
