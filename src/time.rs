@@ -84,12 +84,6 @@ pub struct TimeRange {
   pub(crate) inner: ZTimeRange,
 }
 
-impl TimeRange {
-  pub(crate) fn from_inner(inner: ZTimeRange) -> Self {
-    TimeRange { inner }
-  }
-}
-
 /// Best-effort string form of a `TimeBound<TimeExpr>`. `Unbounded` maps to
 /// `None` (JS `null`); inclusive/exclusive bounds render their `TimeExpr`.
 fn bound_to_string(bound: &ZTimeBound<zenoh::query::TimeExpr>) -> Option<String> {

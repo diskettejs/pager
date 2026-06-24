@@ -6,7 +6,6 @@ use napi_derive::napi;
 
 use crate::cancellation::CancellationTokenArg;
 use crate::handlers::ChannelConfig;
-use crate::keyexpr::KeyExprArg;
 use crate::protocol::ParametersArg;
 use crate::qos::{CongestionControl, Locality, Priority, Reliability};
 use crate::query::{ConsolidationMode, QueryTarget, ReplyKeyExpr};

@@ -6,12 +6,6 @@ pub struct Config {
   pub(crate) inner: ZConfig,
 }
 
-impl Config {
-  pub(crate) fn from_inner(inner: ZConfig) -> Self {
-    Config { inner }
-  }
-}
-
 #[napi]
 impl Config {
   /// The default configuration, used to open a session.

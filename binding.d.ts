@@ -1397,10 +1397,6 @@ export declare class Scout {
   /**
    * Scout for zenoh processes matching `what` (router/peer/client), using
    * `config` for the multicast settings.
-   *
-   * The `handler` option chooses the channel delivering `Hello` replies
-   * (default: FIFO with capacity 256). The returned `Scout` keeps
-   * scouting until `stop` is called or it is dropped.
    */
   static scout(what: WhatAmIMatcher, config: Config, options?: ScoutOptions | undefined | null): Promise<Scout>
   /**
@@ -1408,13 +1404,7 @@ export declare class Scout {
    * `RingChannelHandler` depending on the channel chosen at scout time.
    */
   get handler(): FifoChannelHandlerHello | RingChannelHandlerHello
-  /**
-   * Stop scouting. Idempotent; a second call is a no-op.
-   *
-   * For a ring scout still referenced by an outstanding handler, this drops our
-   * strong reference and lets the last handler release stop it. Dropping the
-   * `Scout` does the same.
-   */
+  /** Stop scouting. Idempotent; a second call is a no-op. */
   stop(): void
 }
 

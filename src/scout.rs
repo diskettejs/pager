@@ -41,10 +41,6 @@ impl Scout {
 impl Scout {
   /// Scout for zenoh processes matching `what` (router/peer/client), using
   /// `config` for the multicast settings.
-  ///
-  /// The `handler` option chooses the channel delivering `Hello` replies
-  /// (default: FIFO with capacity 256). The returned `Scout` keeps
-  /// scouting until `stop` is called or it is dropped.
   #[napi(factory)]
   pub async fn scout(
     what: &WhatAmIMatcher,
@@ -97,10 +93,6 @@ impl Scout {
   }
 
   /// Stop scouting. Idempotent; a second call is a no-op.
-  ///
-  /// For a ring scout still referenced by an outstanding handler, this drops our
-  /// strong reference and lets the last handler release stop it. Dropping the
-  /// `Scout` does the same.
   #[napi]
   pub unsafe fn stop(&mut self) {
     // Taking the inner out and dropping it cancels the scouting task (its `Drop`

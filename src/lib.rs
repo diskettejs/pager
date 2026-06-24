@@ -1,5 +1,3 @@
-#![allow(dead_code, unused)]
-
 mod bytes;
 mod cancellation;
 mod config;

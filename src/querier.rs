@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use napi::bindgen_prelude::{Either, Uint8Array};
+use napi::bindgen_prelude::Either;
 use napi_derive::napi;
 use zenoh::handlers::{FifoChannel, RingChannel};
 use zenoh::key_expr::KeyExpr as ZKeyExpr;
